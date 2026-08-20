@@ -103,9 +103,24 @@ struct RootView: View
 	}
 
 	#if os(macOS)
+		/// List の単一選択は Optional のバインディングしか受け付けない
+		/// （iOS の TabView は非 Optional）。両方を 1 つの @State で回すため、
+		/// ここで包み直す。nil が来たら選択を変えない（選択解除を無視する）。
+		private var paneSelection: Binding<Pane?>
+		{
+			Binding(
+				get: { pane },
+				set: { newValue in
+					if let newValue
+					{
+						pane = newValue
+					}
+				})
+		}
+
 		private var sidebar: some View
 		{
-			List(selection: $pane)
+			List(selection: paneSelection)
 			{
 				Section
 				{

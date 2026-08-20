@@ -30,7 +30,12 @@ func emit(_ text: String)
 	FileHandle.standardOutput.write(Data(text.utf8))
 }
 
-let usage = """
+// 使い方の文言は関数にしてある。async な main.swift のトップレベル変数は
+// 暗黙に MainActor 隔離になり、nonisolated な関数から読めないため
+// （グローバルにせず、呼ばれたときに組み立てる）。
+func usageText() -> String
+{
+	"""
 	mlxchat-cli — MLX でローカル LLM を動かす
 
 	  mlxchat-cli [chat] [<プロンプト>] [オプション]
@@ -55,26 +60,32 @@ let usage = """
 	  -n, --runs <int>            実行回数（既定 3）
 	      --warmup <int>          捨てる先頭の回数（既定 1）
 	"""
+}
+
+/// 引数を解釈する。誤りは使い方を出して終了（＝呼び出し側は成功だけを扱えばよい）。
+func parseCommand(_ arguments: [String]) -> APICommand
+{
+	do
+	{
+		return try APICommand.parse(arguments: arguments)
+	}
+	catch
+	{
+		note("error: \((error as? LocalizedError)?.errorDescription ?? "\(error)")")
+		note("")
+		note(usageText())
+		exit(2)
+	}
+}
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 if arguments.contains("-h") || arguments.contains("--help")
 {
-	print(usage)
+	print(usageText())
 	exit(0)
 }
 
-let command: APICommand
-do
-{
-	command = try APICommand.parse(arguments: arguments)
-}
-catch
-{
-	note("error: \((error as? LocalizedError)?.errorDescription ?? "\(error)")")
-	note("")
-	note(usage)
-	exit(2)
-}
+let command = parseCommand(arguments)
 
 let device = DeviceProfile.current()
 MLXChatEngine.applyMemoryLimits(device)
