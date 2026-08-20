@@ -84,19 +84,12 @@ ensure_project() {
 }
 
 # xcode_build <scheme> <destination>: 共通のビルド呼び出し。
-# 署名は project.yml で切ってあるので、ここでは指定しない。
+# 引数の組み立ては scripts/xcode-build.sh に 1 か所だけ置いてある（build.yml と
+# 同じものを通す — 片方だけにフラグを足すと「CI では通るが調査では落ちる」が起きる）。
 xcode_build() {
 	local scheme="$1" destination="$2"
 	# shellcheck disable=SC2086
-	xcodebuild build \
-		-project MLXChat.xcodeproj \
-		-scheme "$scheme" \
-		-configuration Debug \
-		-destination "$destination" \
-		-derivedDataPath "$DERIVED" \
-		-clonedSourcePackagesDirPath "$PWD/.spm" \
-		-skipMacroValidation \
-		$ARGS
+	DERIVED_DATA="$DERIVED" scripts/xcode-build.sh "$scheme" "$destination" Debug $ARGS
 }
 
 # ---------------------------------------------------------------------------

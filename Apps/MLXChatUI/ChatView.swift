@@ -26,6 +26,16 @@ struct ChatView: View
 		{
 			ToolbarItem
 			{
+				// 書き出しは Core（Transcript）が組み立てる。実測値つきの
+				// Markdown なので、答えと「そのときの速度」を一緒に人へ渡せる。
+				ShareLink(item: Transcript.markdown(model.conversation))
+				{
+					Label("書き出す", systemImage: "square.and.arrow.up")
+				}
+				.disabled(model.conversation.messages.isEmpty)
+			}
+			ToolbarItem
+			{
 				Button
 				{
 					model.newConversation()

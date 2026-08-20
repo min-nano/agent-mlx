@@ -114,29 +114,13 @@ jobs:
       - name: Generate Xcode project
         run: scripts/generate-xcodeproj.sh
 
+      # xcodebuild の引数は scripts/xcode-build.sh に 1 か所だけ置いてある
+      # （ci-debug の xcode-* モードも同じスクリプトを通る）。
       - name: Build (Release, arm64)
-        run: |
-          set -euo pipefail
-          xcodebuild build \
-            -project MLXChat.xcodeproj \
-            -scheme MLXChat-macOS \
-            -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derived \
-            -clonedSourcePackagesDirPath .spm \
-            -skipMacroValidation
+        run: scripts/xcode-build.sh MLXChat-macOS 'platform=macOS,arch=arm64' Release
 
       - name: Build the CLI
-        run: |
-          set -euo pipefail
-          xcodebuild build \
-            -project MLXChat.xcodeproj \
-            -scheme mlxchat-cli \
-            -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derived \
-            -clonedSourcePackagesDirPath .spm \
-            -skipMacroValidation
+        run: scripts/xcode-build.sh mlxchat-cli 'platform=macOS,arch=arm64' Release
 
       # GUI と同じ機能を CLI からも使えるよう、アプリへ同梱する。Xcode の
       # ターゲット依存でコピーさせず CI でやっているのは、ツールターゲットの
@@ -257,16 +241,7 @@ jobs:
       # 実機向け（generic/platform=iOS）だけをビルドする。署名は project.yml で
       # 切ってあるので、証明書もプロビジョニングプロファイルも要らない。
       - name: Build (Release, device, unsigned)
-        run: |
-          set -euo pipefail
-          xcodebuild build \
-            -project MLXChat.xcodeproj \
-            -scheme MLXChat-iOS \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath .derived \
-            -clonedSourcePackagesDirPath .spm \
-            -skipMacroValidation
+        run: scripts/xcode-build.sh MLXChat-iOS 'generic/platform=iOS' Release
 
       - name: Stamp the build
         env:
