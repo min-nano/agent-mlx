@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+	<defs>
+		<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+			<stop offset="0%" stop-color="#1B1033"/>
+			<stop offset="100%" stop-color="#0A0A14"/>
+		</linearGradient>
+		<!-- 水平線に objectBoundingBox のグラデーションを当てるとバウンディング
+		     ボックスの高さが 0 になり描画されない。座標系を明示する。 -->
+		<linearGradient id="ring" gradientUnits="userSpaceOnUse"
+		                x1="120" y1="380" x2="904" y2="600">
+			<stop offset="0%" stop-color="#7C5CFF"/>
+			<stop offset="100%" stop-color="#4A3AA8"/>
+		</linearGradient>
+	</defs>
+
+	<!-- 背景。角丸は OS 側でマスクされるが、単体で見たときのために付けておく -->
+	<rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+
+	<!-- チップの脚（左右に伸びる線）。「これは端末の中で動く」の記号 -->
+	<g stroke="url(#ring)" stroke-width="26" stroke-linecap="round" opacity="0.9">
+		<path d="M124 400 H208"/>
+		<path d="M124 490 H208"/>
+		<path d="M124 580 H208"/>
+		<path d="M816 400 H900"/>
+		<path d="M816 490 H900"/>
+		<path d="M816 580 H900"/>
+	</g>
+
+	<!-- 吹き出し本体 -->
+	<path d="M300 236 H724 a76 76 0 0 1 76 76 V632 a76 76 0 0 1 -76 76 H520
+	         l-118 118 v-118 H300 a76 76 0 0 1 -76 -76 V312 a76 76 0 0 1 76 -76 Z"
+	      fill="#F5F3FF"/>
+
+	<!-- 吹き出しの中のチップ格子 -->
+	<g>
+		<rect x="330" y="360" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="422" y="360" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="514" y="360" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="606" y="360" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="330" y="452" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="422" y="452" width="46" height="46" rx="12" fill="#FFC857" opacity="1"/>
+		<rect x="514" y="452" width="46" height="46" rx="12" fill="#FFC857" opacity="1"/>
+		<rect x="606" y="452" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="330" y="544" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="422" y="544" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="514" y="544" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+		<rect x="606" y="544" width="46" height="46" rx="12" fill="#7C5CFF" opacity="0.55"/>
+	</g>
+</svg>
