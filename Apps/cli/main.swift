@@ -30,6 +30,13 @@ func emit(_ text: String)
 	FileHandle.standardOutput.write(Data(text.utf8))
 }
 
+/// 思考（推論モデルの `<think>` の中身）を標準エラーへ流す。改行を足さないので、
+/// 届いた順にそのまま繋がって「考えている様子」が見える。
+func trace(_ text: String)
+{
+	FileHandle.standardError.write(Data(text.utf8))
+}
+
 // 使い方の文言は関数にしてある。async な main.swift のトップレベル変数は
 // 暗黙に MainActor 隔離になり、nonisolated な関数から読めないため
 // （グローバルにせず、呼ばれたときに組み立てる）。
@@ -55,6 +62,10 @@ func usageText() -> String
 	  -p, --prompt <text>         プロンプト（省略時は標準入力から読む）
 	  -s, --system <text>         システム指示
 	  -o, --output <file>         応答をファイルへも書き出す
+
+	推論モデル（Qwen3 / SmolLM3 など）の思考は標準エラーへ流します。
+	標準出力に出るのは答えだけなので、`mlxchat-cli "..." > answer.txt` は
+	そのまま使えます（思考も残したいときは 2> でリダイレクトしてください）。
 
 	bench のオプション:
 	  -n, --runs <int>            実行回数（既定 3）
@@ -131,6 +142,10 @@ switch command
 
 		var answer = ""
 		var failed = false
+		// 思考と答えの切り分けは Core（ReasoningSplitter）が持つ。GUI と
+		// 同じ型を同じ順に回すので、両者で見え方がずれない。
+		var splitter = ReasoningSplitter()
+		var tracedReasoning = false
 		for await event in MLXChatEngine.shared.events(for: request)
 		{
 			switch event
@@ -150,9 +165,28 @@ switch command
 				case .modelReady(let seconds):
 					note(String(format: "モデル読み込み: %.1fs", seconds))
 				case .token(let text):
-					answer += text
-					emit(text)
+					let chunk = splitter.consume(text)
+					answer += chunk.answer
+					emit(chunk.answer)
+					if !chunk.reasoning.isEmpty
+					{
+						tracedReasoning = true
+						trace(chunk.reasoning)
+					}
 				case .finished(let stats):
+					// 保留されていた末尾（タグの途中に見えた文字列）を出し切る。
+					let tail = splitter.flush()
+					answer += tail.answer
+					emit(tail.answer)
+					if !tail.reasoning.isEmpty
+					{
+						tracedReasoning = true
+						trace(tail.reasoning)
+					}
+					if tracedReasoning
+					{
+						trace("\n")
+					}
 					emit("\n")
 					note(stats.summaryLine)
 				case .failed(let message):

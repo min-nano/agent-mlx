@@ -98,6 +98,10 @@ public struct Conversation: Identifiable, Codable, Equatable, Sendable
 	/// 古いほうから落とすが、**必ず user 発言から始まる**ように 1 つ余分に落とす
 	/// ことがある。assistant 発言で始まる履歴はチャットテンプレートの前提を崩し、
 	/// モデルによっては露骨に品質が落ちるため。
+	///
+	/// 推論モデルの思考は ``ChatMessage/reasoning`` に分けてあり ``ChatMessage/text``
+	/// には入らないので、ここでは何もしなくても履歴から外れる（前の思考を食べさせ
+	/// ないための処置。詳しくは ``ReasoningSplitter``）。
 	public func promptMessages(maxMessages: Int) -> [ChatMessage]
 	{
 		var history: [ChatMessage] = []

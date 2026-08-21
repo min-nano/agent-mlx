@@ -82,10 +82,10 @@ struct ChatView: View
 				}
 				.padding()
 			}
-			// 生成中は届いたトークンを追って一番下へ寄せ続ける。ここを
-			// 「本文の長さ」ではなく最後の発言 id で見ているのは、長い応答で
-			// 毎トークン再計算するのを避けるため。
-			.onChange(of: model.conversation.messages.last?.text)
+			// 生成中は届いたトークンを追って一番下へ寄せ続ける。長さの合計を
+			// 見ているのは、推論モデルが**思考だけを伸ばしている間**（本文は空の
+			// まま）もスクロールを追従させるため。
+			.onChange(of: streamedLength)
 			{
 				guard let last = model.conversation.messages.last
 				else
@@ -118,6 +118,20 @@ struct ChatView: View
 			}
 		}
 		.padding(.vertical, 24)
+	}
+
+	/// 生成中の発言の長さ（思考を含む）。スクロール追従の変化検知に使う。
+	///
+	/// 本文だけを見ると、推論モデルが思考を伸ばしている間（本文は空のまま）に
+	/// 追従が止まってしまう。
+	private var streamedLength: Int
+	{
+		guard let last = model.conversation.messages.last
+		else
+		{
+			return 0
+		}
+		return last.text.count + (last.reasoning?.count ?? 0)
 	}
 
 	private var currentModelName: String

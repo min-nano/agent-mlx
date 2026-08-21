@@ -75,6 +75,9 @@ final class ChatViewModel: ObservableObject
 	private let store: ConversationStore?
 	private let storage: ModelStorage?
 	private var generationTask: Task<Void, Never>?
+	/// 届いたトークンを本文と思考へ振り分ける（生成ごとに作り直す）。
+	/// 判断そのものは Core の ReasoningSplitter が持ち、ここは回すだけ。
+	private var splitter = ReasoningSplitter()
 
 	init()
 	{
@@ -169,6 +172,7 @@ final class ChatViewModel: ObservableObject
 			id: answerID, role: .assistant, text: "", modelID: request.modelID))
 		phase = .downloading
 		downloadProgress = 0
+		splitter = ReasoningSplitter()
 
 		let engine = self.engine
 		generationTask = Task
@@ -201,13 +205,10 @@ final class ChatViewModel: ObservableObject
 			case .modelReady:
 				refreshDownloadedModels()
 			case .token(let text):
-				guard let index = conversation.messages.firstIndex(where: { $0.id == answerID })
-				else
-				{
-					return
-				}
-				conversation.messages[index].text += text
+				append(splitter.consume(text), to: answerID)
 			case .finished(let stats):
+				// 保留されていた末尾（タグの途中に見えた文字列）を先に吐き出す。
+				append(splitter.flush(), to: answerID)
 				if let index = conversation.messages.firstIndex(where: { $0.id == answerID })
 				{
 					conversation.messages[index].stats = stats
@@ -215,11 +216,29 @@ final class ChatViewModel: ObservableObject
 				phase = nil
 				persist()
 			case .failed(let message):
+				append(splitter.flush(), to: answerID)
 				errorMessage = message
 				// 中身の無い応答が会話に残ると、次の生成でモデルへ空の
 				// assistant 発言を渡すことになる。失敗したときは取り除く。
 				conversation.messages.removeAll { $0.id == answerID && $0.text.isEmpty }
 				phase = nil
+		}
+	}
+
+	/// 切り分け済みの断片を、生成中の発言へ継ぎ足す。
+	private func append(_ chunk: ReasoningText, to answerID: UUID)
+	{
+		guard !chunk.answer.isEmpty || !chunk.reasoning.isEmpty,
+			let index = conversation.messages.firstIndex(where: { $0.id == answerID })
+		else
+		{
+			return
+		}
+		conversation.messages[index].text += chunk.answer
+		if !chunk.reasoning.isEmpty
+		{
+			conversation.messages[index].reasoning =
+				(conversation.messages[index].reasoning ?? "") + chunk.reasoning
 		}
 	}
 
