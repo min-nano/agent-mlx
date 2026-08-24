@@ -89,6 +89,9 @@ struct ParametersView: View
 			}
 		}
 		.navigationTitle("設定")
+		// 入力欄があるので、キーボードを畳める手段を足す（iOS で下タブが
+		// 隠れたままになるのを防ぐ）。
+		.dismissibleKeyboard()
 	}
 
 	/// Picker は Optional を扱いにくいので 0 =「量子化しない」に写す。

@@ -104,6 +104,9 @@ struct BenchmarkView: View
 			}
 		}
 		.navigationTitle("ベンチマーク")
+		// 入力欄があるので、キーボードを畳める手段を足す（iOS で下タブが
+		// 隠れたままになるのを防ぐ）。
+		.dismissibleKeyboard()
 		.onAppear { model.adoptIfNeeded(modelID: chat.conversation.modelID) }
 		.alert(
 			"エラー",

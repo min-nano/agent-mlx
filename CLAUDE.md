@@ -95,6 +95,10 @@ docs/design.md              ← 設計の「なぜ」。人間と Claude 以外�
   両方＋テストを更新する。
 - **エンジンはプロセスに 1 つ（`MLXChatEngine.shared`）**。チャット画面とベンチ
   マーク画面が別々に持つと同じ重みを二重に読み込む（数 GB × 2）。節約ではなく必須。
+- **文字入力のある画面には `.dismissibleKeyboard()` を必ず付ける。** iOS は
+  キーボードが出ている間 TabView の下タブを隠すので、畳む手段が無いと
+  **一度入力欄に触れたら他の画面へ移れなくなる**（実機で踏んだ）。実装は
+  `Apps/MLXChatUI/KeyboardDismiss.swift` に 1 つだけ置いてある。
 - **別プロセス化はしない。** 姉妹リポジトリ photogrammetry は RealityKit が
   `abort()` しうるため生成をヘルパープロセスに追い出しているが、MLX は
   `abort()` しない。危険なのはメモリ不足による OS 側の強制終了で、これは

@@ -45,6 +45,9 @@ struct ChatView: View
 				.disabled(model.isGenerating)
 			}
 		}
+		// iOS はキーボードが出ると下タブが隠れる。畳む手段が無いと画面を
+		// 移れなくなるので必ず付ける（KeyboardDismiss.swift を参照）。
+		.dismissibleKeyboard()
 		.alert(
 			"エラー",
 			isPresented: Binding(
@@ -179,10 +182,17 @@ struct ChatView: View
 				.lineLimit(1 ... 6)
 				.textFieldStyle(.roundedBorder)
 				.focused($inputFocused)
-				.onSubmit { model.send() }
+				.onSubmit
+				{
+					model.send()
+					inputFocused = false
+				}
 			Button
 			{
 				model.send()
+				// 送ったあとは答えを読みたいので、キーボードは引っ込める。
+				// iOS では畳まないと下タブが隠れたままになる。
+				inputFocused = false
 			} label: {
 				Label("送信", systemImage: "arrow.up.circle.fill")
 					.labelStyle(.iconOnly)
