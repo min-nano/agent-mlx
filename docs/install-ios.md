@@ -177,6 +177,64 @@ iPhone の **設定** → **一般** → **VPN とデバイス管理** → **デ
 
 ---
 
+## 2 回目からはターミナル 1 コマンドで
+
+一度 Xcode の GUI から実機で動かせたら、以降は Xcode を開かずに済みます。
+
+```sh
+scripts/run-ios.sh
+```
+
+これだけで **ビルド（署名あり）→ 転送 → 起動**まで通ります。中でやっているのは
+`xcodebuild -allowProvisioningUpdates`（手元の Apple ID でプロファイルを作らせる）と
+`xcrun devicectl`（転送・起動）で、Xcode の GUI が裏でやっていることと同じです。
+
+```sh
+scripts/run-ios.sh --debug        # Debug でビルド（速度は落ちる。開発用）
+scripts/run-ios.sh --no-launch    # 転送まで
+scripts/run-ios.sh --build-only   # ビルドまで
+scripts/run-ios.sh --list         # 使えるチームとデバイスを一覧
+```
+
+### 設定
+
+チーム ID と転送先は自動で決まります。**Xcode に登録した Apple ID が 1 つ**で、
+**繋がっている iPhone が 1 台**なら、何も設定せずに動きます。
+
+決められないときは `--list` で候補を見て、`.mlxchat-local.env`（git 管理外）に
+書いてください。
+
+```sh
+scripts/run-ios.sh --list
+
+cat >> .mlxchat-local.env <<'EOF'
+MLX_TEAM_ID=XXXXXXXXXX
+MLX_DEVICE=h-ikeda の iPhone
+EOF
+```
+
+| 変数 | 何 |
+| --- | --- |
+| `MLX_TEAM_ID` | 署名に使う Team ID（10 文字） |
+| `MLX_DEVICE` | 転送先。デバイス名の一部か UDID |
+| `MLX_BUNDLE_ID` | バンドル ID。既定が他人に取られているときに差し替える |
+
+### なぜ「一度は GUI から」が要るのか
+
+無料アカウント（Personal Team）では、**そのデバイスを開発用に登録する**手続きが
+初回だけ必要で、これは Xcode の GUI が面倒を見ます。登録が済んでいれば
+`-allowProvisioningUpdates` がプロファイルを作り直せるので、以降はスクリプトだけで
+回せます。有料の Apple Developer Program なら最初からスクリプトだけで通ることも
+あります。
+
+うまくいかないときは、一度 Xcode で ⌘R してから、またスクリプトに戻ってください。
+
+> **`scripts/xcode-build.sh` とは別物です。**あちらは証明書を持たない CI 用で、
+> **署名を切って**ビルドします。同じスクリプトにまとめると「CI で署名してしまう」
+> 「手元で署名し忘れる」がどちらも起こり得るので、意図的に分けてあります。
+
+---
+
 ## 無料 Apple ID の制約
 
 無料アカウント（Personal Team）で署名したアプリには、Apple の制限があります。
@@ -227,6 +285,9 @@ GitHub Releases の `MLXChat.ipa` は**未署名**です（証明書を CI に�
 | シミュレータを選ぶとビルドできない | **仕様です。**MLX は Metal の GPU family を要求するので実機のみ |
 | 数分で「メモリ不足」と言われて落ちる | モデルが大きすぎます。設定の **KV キャッシュ量子化**を 8bit に、それでも駄目なら 1 つ小さいモデルへ |
 | 生成が遅い気がする | **手順 6** の Release ビルドになっているか確認 |
+| `run-ios.sh` が Team ID を決められない | `scripts/run-ios.sh --list` で候補を見て `.mlxchat-local.env` に `MLX_TEAM_ID` を書く |
+| `run-ios.sh` がデバイスを決められない | 同じく `MLX_DEVICE` を書く。複数繋いでいるときは必須 |
+| `run-ios.sh` の署名が通らない | そのデバイスで一度 Xcode から ⌘R して、デバイス登録を済ませる |
 
 ---
 

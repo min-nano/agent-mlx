@@ -12,6 +12,9 @@ DerivedData/
 .derived/
 .spm/
 
+# 手元だけの設定（Team ID・転送先デバイスなど。scripts/run-ios.sh が読む）
+.mlxchat-local.env
+
 # パッケージング・CI の成果物
 dist/
 dist-app/

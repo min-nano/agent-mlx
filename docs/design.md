@@ -370,5 +370,6 @@ Apple Developer 証明書を CI に置かない方針です。結果として:
 | `UpdaterService` が探す `install-update.sh` | `project.yml` の resources 指定 | 自動アップデートが「アプリバンドルではない」と言って止まる |
 | `ModelStorage.directory(for:)` | `MLXLMCommon` の `defaultHubApi` | ダウンロード済みなのに一覧に出ない／消しても減らない |
 | `scripts/xcode-build.sh` | `build.yml` と `ci-debug-job.sh` | 「CI では通るが調査では落ちる」（逆も） |
+| `scripts/xcode-build.sh`（署名しない・CI 用） | `scripts/run-ios.sh`（署名する・手元用） | 1 本にまとめると「CI で署名してしまう」「手元で署名し忘れる」がどちらも起こる。分けたまま保つこと |
 | `project.yml`（署名を切る指定を**書かない**） | `scripts/xcode-build.sh`（切るのはここだけ） | project.yml 側に書くと、手元の Xcode から実機へ入れられなくなる（未署名アプリは iOS が拒否する） |
 | カバレッジの除外リスト | 「その層に判断を置かない」という約束 | 除外した層に判断が溜まっても誰も気づかない |

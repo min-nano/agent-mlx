@@ -161,6 +161,9 @@ MLX の重みはユニファイドメモリに載るのでその上限にその�
 - ローカル（純ロジック）: `swift build` / `swift test`。MLX を引かないので速い。
 - ローカル（アプリ）: `scripts/generate-xcodeproj.sh` → Xcode で開く。
   `.xcodeproj` はリポジトリに入れない（原本は `project.yml`）。
+- ローカル（iPhone 実機）: `scripts/run-ios.sh` が署名つきビルド → 転送 → 起動
+  までやる。**`scripts/xcode-build.sh`（CI 用・署名を切る）と混ぜないこと** —
+  1 本にまとめると「CI で署名してしまう」「手元で署名し忘れる」がどちらも起こる。
 - **macOS 版は Apple Silicon 専用**（`ARCHS: arm64`）。MLX は Metal の GPU
   family を要求するので Intel Mac では動かない。ユニバーサルにしない。
 - **iOS 版はシミュレータで動かない**（同じ理由）。`SUPPORTED_PLATFORMS:
