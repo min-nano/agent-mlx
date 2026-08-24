@@ -179,7 +179,7 @@ fetch_payload() {
 	jobs="$(api "$MLX_API/actions/runs/$id/jobs")"
 	job="$(printf '%s' "$jobs" | jq -r '.jobs[0].id // empty')"
 	[ -n "$job" ] || {
-		echo "ci-debug: ジョブが見つかりませんでした（run=$id）" >&2
+		echo "ci-debug: ジョブが見つかりませんでした（run=${id}）" >&2
 		return 1
 	}
 	check="$(printf '%s' "$jobs" | jq -r '.jobs[0].check_run_url // empty')"
@@ -266,13 +266,13 @@ case "$CMD" in
 		code="$(api -o /dev/null -w '%{http_code}' -X POST \
 			-d "$body" "$MLX_API/actions/workflows/$WORKFLOW_FILE/dispatches")"
 		[ "$code" = "204" ] ||
-			die "ディスパッチに失敗しました（HTTP $code）。ci-debug.yml が main にマージ済みか、ref='$REF' が push 済みかを確認してください"
+			die "ディスパッチに失敗しました（HTTP ${code}）。ci-debug.yml が main にマージ済みか、ref='$REF' が push 済みかを確認してください"
 
 		# 待機プロセスが失われても後から合流できるよう、label は必ず先に出す。
 		echo "label=$LABEL"
 		echo "ref=$REF mode=$MODE"
 
-		run_id="$(resolve_run "$LABEL")" || die "起動した run を特定できませんでした（label=$LABEL）"
+		run_id="$(resolve_run "$LABEL")" || die "起動した run を特定できませんでした（label=${LABEL}）"
 		echo "run_id=$run_id"
 		echo "run_url=https://github.com/$MLX_REPO/actions/runs/$run_id"
 

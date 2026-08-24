@@ -314,6 +314,16 @@ result=<success|failure|no-checks|timeout|pr-merged|pr-closed> sha=... total=N f
 持ち、**どの経路でも必ず exit する**。パイプ（`| tail`）でつながず、ファイルへ
 リダイレクトして `Read` すること。
 
+## シェルスクリプト規約
+
+- メッセージは日本語。ただし **`$VAR` の直後に全角文字を置かない** —
+  `"…（team=${TEAM_ID}）"` のように波括弧で閉じる。macOS 標準の bash 3.2 は
+  マルチバイトのバイトを変数名に取り込んでしまい `TEAM_ID?: unbound variable`
+  で落ちる（CI のランナーは新しい bash なので**再現しない**。実機で踏んだ）。
+- `scripts/check-shell.sh` が `bash -n` とこの検査をまとめて行う。`test.yml`
+  から走るので、push すれば勝手に見てくれる。スクリプトを足したら、まずこれを
+  手元で 1 回通すこと。
+
 ## Swift コード規約
 
 - インデントはタブ。ブレースは Allman（既存ソースに合わせる）。

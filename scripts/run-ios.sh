@@ -330,7 +330,7 @@ fi
 # ビルド（署名あり）
 # ---------------------------------------------------------------------------
 
-say "ビルドします（$CONFIGURATION / team=$TEAM_ID）"
+say "ビルドします（$CONFIGURATION / team=${TEAM_ID}）"
 if [ "$CONFIGURATION" = "Debug" ]; then
 	echo "    ※ Debug は最適化が効かないので tok/s は実力より落ちます"
 fi
@@ -361,7 +361,7 @@ APP="$DERIVED/Build/Products/$CONFIGURATION-iphoneos/MLXChat.app"
 [ -d "$APP" ] || die "ビルド成果物が見つかりません: $APP"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")"
-say "できました: $APP （$BUNDLE_ID）"
+say "できました: $APP （${BUNDLE_ID}）"
 
 if [ "$DO_INSTALL" = "0" ]; then
 	exit 0
@@ -381,7 +381,7 @@ if [ "$STATE" != "connected" ]; then
 	exit 1
 fi
 
-say "転送します（$UDID）"
+say "転送します（${UDID}）"
 xcrun devicectl device install app --device "$UDID" "$APP"
 
 if [ "$DO_LAUNCH" = "0" ]; then

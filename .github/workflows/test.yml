@@ -67,6 +67,12 @@ jobs:
           pipx install diff-cover
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # シェルスクリプトの機械的な検査。数秒で終わる。特に「変数展開の直後の
+      # マルチバイト文字」は、ランナーの新しい bash では再現せず macOS 標準の
+      # bash 3.2 でだけ落ちるので、ここで見ておかないと手元で初めて気づく。
+      - name: Check shell scripts
+        run: scripts/check-shell.sh
+
       - name: Run tests (with coverage instrumentation)
         run: swift test --enable-code-coverage
 
