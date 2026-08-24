@@ -55,6 +55,29 @@ scripts/generate-xcodeproj.sh    # XcodeGen が無ければ Homebrew で入り�
 open MLXChat.xcodeproj
 ```
 
+> ### ⚠️ 開くのは `MLXChat.xcodeproj` です
+>
+> **フォルダごと Xcode にドラッグしたり、`Package.swift` を開いたりしないで
+> ください。**そうすると Xcode は Swift Package として開いてしまい、
+> **Signing & Capabilities タブが存在しません**（Swift Package のターゲットに
+> 署名の概念が無いため）。手順 4 で詰まる原因のほとんどがこれです。
+>
+> ナビゲータのいちばん上を見れば、どちらを開いているか分かります。
+>
+> | | 正しい | 間違い |
+> | --- | --- | --- |
+> | アイコン | 🔵 青い Xcode プロジェクト | 📦 茶色い箱（Swift Package） |
+> | 名前 | **MLXChat** | agent-mlx |
+> | 中身 | MLXChat-iOS / MLXChat-macOS / mlxchat-cli | README / Package / Apps / docs … |
+>
+> デスティネーションの表示でも見分けられます。アプリのスキームは arm64 だけ
+> ですが、Swift Package のほうは `Any iOS Device (arm64, arm64_32, x86_64)` の
+> ように複数のアーキテクチャが並びます。
+>
+> なお、この状態でも「Build Succeeded」と出ることがあります。それは
+> `Sources/` の純ロジック（MLX を含まない部分）がビルドされただけで、
+> アプリはビルドされていません。
+
 ### 3. Xcode に Apple ID を登録する
 
 Xcode → **Settings** → **Accounts** → 左下の **+** → Apple ID → サインイン。
@@ -63,11 +86,24 @@ Xcode → **Settings** → **Accounts** → 左下の **+** → Apple ID → サ
 
 ### 4. 署名（Signing）を設定する
 
-左のファイル一覧のいちばん上 **MLXChat**（青いアイコン）→ TARGETS の
-**MLXChat-iOS** → **Signing & Capabilities** タブ。
+たどり方:
+
+1. **⌘1** でプロジェクトナビゲータを開く
+2. いちばん上の **青いアイコンの `MLXChat`** をクリック
+3. エディタの左側に **PROJECT** と **TARGETS** の一覧が出る
+   - 出ていなければ、エディタ左上の小さなボタン（⊞）で開けます。ウインドウが
+     狭いと自動で畳まれます
+4. **TARGETS → `MLXChat-iOS`** を選ぶ
+5. エディタ上部のタブ **General / Signing & Capabilities / Resource Tags /
+   Info / Build Settings / …** から **Signing & Capabilities** を選ぶ
+
+そこで:
 
 1. **Automatically manage signing** にチェック（既定でチェック済みのはずです）
 2. **Team** に自分の Personal Team を選ぶ
+
+> タブに **Signing & Capabilities** が無いときは、Xcode プロジェクトではなく
+> Swift Package を開いています。手順 2 の警告に戻ってください。
 
 ここで次のエラーが出ることがあります。
 
@@ -186,6 +222,8 @@ GitHub Releases の `MLXChat.ipa` は**未署名**です（証明書を CI に�
 | 起動しようとすると「信頼されていないデベロッパ」 | **手順 8** |
 | `The maximum number of apps for free development profiles has been reached` | 無料アカウントの 3 アプリ制限。他の自作アプリを消す |
 | デスティネーションに iPhone が出ない | ケーブル接続と「信頼」を確認。それでも出なければ Xcode を再起動 |
+| **Signing & Capabilities タブが無い** | Xcode プロジェクトではなく Swift Package（フォルダ / `Package.swift`）を開いています。**手順 2** のとおり `MLXChat.xcodeproj` を開き直す |
+| `MLXChat.xcodeproj` が見当たらない | 生成物なので Git に入っていません。`scripts/generate-xcodeproj.sh` を実行 |
 | シミュレータを選ぶとビルドできない | **仕様です。**MLX は Metal の GPU family を要求するので実機のみ |
 | 数分で「メモリ不足」と言われて落ちる | モデルが大きすぎます。設定の **KV キャッシュ量子化**を 8bit に、それでも駄目なら 1 つ小さいモデルへ |
 | 生成が遅い気がする | **手順 6** の Release ビルドになっているか確認 |

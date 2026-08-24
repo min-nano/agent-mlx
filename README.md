@@ -249,6 +249,10 @@ scripts/generate-xcodeproj.sh   # project.yml → MLXChat.xcodeproj（XcodeGen�
 open MLXChat.xcodeproj
 ```
 
+> **開くのは `MLXChat.xcodeproj` です。**フォルダや `Package.swift` を開くと
+> Xcode は Swift Package として扱い、アプリのターゲット（と Signing &
+> Capabilities タブ）が出てきません。
+
 iPhone の実機へ入れる手順（署名・デベロッパモード・Release ビルド）は
 [docs/install-ios.md](docs/install-ios.md) にまとめてあります。
 
