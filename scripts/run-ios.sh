@@ -87,29 +87,104 @@ command -v python3 >/dev/null 2>&1 || die "python3 が要ります（デバイ�
 # ---------------------------------------------------------------------------
 # チーム（署名に使う Team ID）
 #
-# Xcode に登録した Apple ID の情報は com.apple.dt.Xcode の設定に入っている。
-# defaults export → plutil で JSON にすれば確実に読める（`defaults read` の
-# 旧形式 plist を正規表現で削るより壊れにくい）。
+# 置き場所が 1 つに決まっていないので、3 つの経路を順に見て拾えたものを使う。
+#   1. Xcode の設定（IDEProvisioningTeams）… Apple ID を追加すると入ることがある
+#   2. プロビジョニングプロファイル          … 一度でも実機向けに署名すると残る
+#   3. キーチェーンの開発用証明書の OU        … 同上。OU が Team ID そのもの
+# **Apple ID を Xcode に足しただけでは 2 も 3 も作られない**（最初に実機向けの
+# 署名を要求したときに初めて作られる）。何も見つからないときの案内は下段にある。
 # ---------------------------------------------------------------------------
 
-xcode_teams_json() {
-	defaults export com.apple.dt.Xcode - 2>/dev/null |
-		plutil -convert json -o - - 2>/dev/null || true
+list_teams() {
+	python3 <<'TEAMS_PY'
+import glob, json, os, re, subprocess
+
+def run(command, stdin=None):
+	try:
+		return subprocess.run(command, input=stdin, capture_output=True, text=True)
+	except Exception:
+		return None
+
+teams = {}
+
+def add(team_id, name, source):
+	if not team_id or not re.fullmatch(r"[A-Z0-9]{10}", team_id):
+		return
+	teams.setdefault(team_id, (name or "?", source))
+
+def as_json(text):
+	converted = run(["plutil", "-convert", "json", "-o", "-", "-"], stdin=text)
+	if not converted or converted.returncode != 0:
+		return None
+	try:
+		return json.loads(converted.stdout)
+	except Exception:
+		return None
+
+# 1. Xcode の設定
+exported = run(["defaults", "export", "com.apple.dt.Xcode", "-"])
+if exported and exported.returncode == 0:
+	data = as_json(exported.stdout) or {}
+	for entries in (data.get("IDEProvisioningTeams") or {}).values():
+		for team in entries or []:
+			add(team.get("teamID"), team.get("teamName"), "Xcode の設定")
+
+# 2. プロビジョニングプロファイル
+patterns = [
+	"~/Library/MobileDevice/Provisioning Profiles/*.mobileprovision",
+	"~/Library/Developer/Xcode/UserData/Provisioning Profiles/*.mobileprovision",
+]
+for pattern in patterns:
+	for path in glob.glob(os.path.expanduser(pattern)):
+		decoded = run(["security", "cms", "-D", "-i", path])
+		if not decoded or decoded.returncode != 0:
+			continue
+		profile = as_json(decoded.stdout) or {}
+		identifiers = profile.get("TeamIdentifier") or []
+		if identifiers:
+			add(identifiers[0], profile.get("TeamName"), "プロファイル")
+
+# 3. キーチェーンの証明書（OU が Team ID）
+for common_name in ("Apple Development", "Apple Distribution",
+                    "iPhone Developer", "iPhone Distribution"):
+	found = run(["security", "find-certificate", "-a", "-c", common_name, "-p"])
+	if not found or found.returncode != 0:
+		continue
+	blocks = re.findall(
+		r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
+		found.stdout, re.S)
+	for block in blocks:
+		subject = run(["openssl", "x509", "-noout", "-subject"], stdin=block)
+		if not subject or subject.returncode != 0:
+			continue
+		unit = re.search(r"OU\s*=\s*([A-Z0-9]{10})", subject.stdout)
+		org = re.search(r"(?:^|[/,])\s*O\s*=\s*([^,/\n]+)", subject.stdout)
+		add(unit.group(1) if unit else None,
+		    org.group(1).strip() if org else None,
+		    "証明書")
+
+for team_id, (name, source) in sorted(teams.items()):
+	print("%s\t%s\t%s" % (team_id, name, source))
+TEAMS_PY
 }
 
-list_teams() {
-	xcode_teams_json | python3 -c '
-import json, sys
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-for account, teams in (data.get("IDEProvisioningTeams") or {}).items():
-    for team in teams or []:
-        free = "無料" if team.get("isFreeProvisioningProfile") in (1, True, "YES") else "有料"
-        print("%s\t%s\t%s\t%s" % (team.get("teamID", "?"), free,
-                                  team.get("teamName", "?"), account))
-'
+# 何も見つからなかったときの案内。--list と失敗時で同じ文言を出すため関数にする。
+print_team_help() {
+	printf '%s\n' \
+		"  （見つかりません）" \
+		"" \
+		"  Apple ID を Xcode に追加しただけでは、開発用の証明書もプロファイルも" \
+		"  作られません（最初に実機向けの署名を要求したときに作られます）。" \
+		"  一度だけ Xcode の GUI を通してください:" \
+		"" \
+		"    open MLXChat.xcodeproj" \
+		"    → ⌘1 → 青い MLXChat → TARGETS の MLXChat-iOS" \
+		"    → Signing & Capabilities → Team に自分の Personal Team を選ぶ" \
+		"    → iPhone を繋いで ⌘R" \
+		"" \
+		"  そのあと、このスクリプトが Team ID を自動で見つけられるようになります。" \
+		"  Team ID が分かっているなら直接指定しても構いません:" \
+		"    echo 'MLX_TEAM_ID=XXXXXXXXXX' >> .mlxchat-local.env"
 }
 
 resolve_team() {
@@ -117,9 +192,8 @@ resolve_team() {
 		printf '%s\n' "$MLX_TEAM_ID"
 		return 0
 	fi
-	local ids
+	local ids count
 	ids="$(list_teams | cut -f1 | sort -u)"
-	local count
 	count="$(printf '%s' "$ids" | grep -c . || true)"
 	if [ "$count" = "1" ]; then
 		printf '%s\n' "$ids"
@@ -139,21 +213,26 @@ devices_tsv() {
 		rm -f "$out"
 		return 1
 	}
-	python3 - "$out" <<'PY'
+	python3 - "$out" <<'DEVICES_PY'
 import json, sys
 with open(sys.argv[1]) as handle:
-    data = json.load(handle)
+	data = json.load(handle)
 for device in (data.get("result") or {}).get("devices") or []:
-    hardware = device.get("hardwareProperties") or {}
-    if hardware.get("platform") != "iOS":
-        continue
-    connection = device.get("connectionProperties") or {}
-    print("%s\t%s\t%s" % (
-        hardware.get("udid", "?"),
-        (device.get("deviceProperties") or {}).get("name", "?"),
-        connection.get("tunnelState", "?")))
-PY
+	hardware = device.get("hardwareProperties") or {}
+	if hardware.get("platform") != "iOS":
+		continue
+	connection = device.get("connectionProperties") or {}
+	print("%s\t%s\t%s" % (
+		hardware.get("udid", "?"),
+		(device.get("deviceProperties") or {}).get("name", "?"),
+		connection.get("tunnelState", "?")))
+DEVICES_PY
 	rm -f "$out"
+}
+
+# device_state <udid>: tunnelState を返す（見つからなければ空）。
+device_state() {
+	devices_tsv | awk -F'\t' -v udid="$1" '$1 == udid { print $3; exit }'
 }
 
 resolve_device() {
@@ -165,12 +244,19 @@ resolve_device() {
 			'index($1, want) || index($2, want) { print $1; exit }'
 		return 0
 	fi
-	# 指定が無ければ、繋がっている 1 台を使う。複数あるときは選べないので失敗させる。
+	# 繋がっているものを優先する。1 台だけならそれを使う。
 	local connected count
-	connected="$(printf '%s\n' "$all" | awk -F'\t' '$3 != "unavailable" { print $1 }')"
+	connected="$(printf '%s\n' "$all" | awk -F'\t' '$3 == "connected" { print $1 }')"
 	count="$(printf '%s' "$connected" | grep -c . || true)"
 	if [ "$count" = "1" ]; then
 		printf '%s\n' "$connected"
+		return 0
+	fi
+	# 繋がっていなくても、知っているデバイスが 1 台ならそれを指す
+	# （「繋いでください」の案内は後段で出す）。
+	count="$(printf '%s\n' "$all" | grep -c . || true)"
+	if [ "$count" = "1" ]; then
+		printf '%s\n' "$all" | cut -f1
 		return 0
 	fi
 	return 1
@@ -183,9 +269,9 @@ resolve_device() {
 if [ "$LIST_ONLY" = "1" ]; then
 	echo "Team ID（MLX_TEAM_ID に入れる値）:"
 	if [ -n "$(list_teams)" ]; then
-		list_teams | awk -F'\t' '{printf "  %s  [%s]  %s  (%s)\n", $1, $2, $3, $4}'
+		list_teams | awk -F'\t' '{printf "  %s  %s  （見つけた場所: %s）\n", $1, $2, $3}'
 	else
-		echo "  （見つかりません。Xcode → Settings → Accounts で Apple ID を追加してください）"
+		print_team_help
 	fi
 	echo
 	echo "iOS デバイス（MLX_DEVICE に入れる値）:"
@@ -216,13 +302,14 @@ if [ ! -d MLXChat.xcodeproj ]; then
 fi
 
 TEAM_ID="$(resolve_team || true)"
-[ -n "$TEAM_ID" ] || die "$(
-	printf '%s\n' \
-		"署名に使う Team ID を決められませんでした。" \
-		"  scripts/run-ios.sh --list  で候補を確認し、" \
-		"  echo 'MLX_TEAM_ID=XXXXXXXXXX' >> .mlxchat-local.env" \
-		"のように設定してください（Xcode に Apple ID を登録済みであることが前提です）。"
-)"
+if [ -z "$TEAM_ID" ]; then
+	{
+		echo "run-ios: error: 署名に使う Team ID を決められませんでした。"
+		echo
+		print_team_help
+	} >&2
+	exit 1
+fi
 
 if [ "$DO_INSTALL" = "1" ]; then
 	UDID="$(resolve_device || true)"
@@ -283,6 +370,16 @@ fi
 # ---------------------------------------------------------------------------
 # 転送と起動
 # ---------------------------------------------------------------------------
+
+STATE="$(device_state "$UDID" || true)"
+if [ "$STATE" != "connected" ]; then
+	echo
+	echo "run-ios: error: iPhone に接続できていません（状態: ${STATE:-不明}）。" >&2
+	echo "  ケーブルで繋ぐか、Xcode の Window → Devices and Simulators で" >&2
+	echo "  「Connect via network」を有効にしてください。" >&2
+	echo "  ビルドは終わっているので、繋いでからもう一度実行すれば転送だけで済みます。" >&2
+	exit 1
+fi
 
 say "転送します（$UDID）"
 xcrun devicectl device install app --device "$UDID" "$APP"
