@@ -45,9 +45,6 @@ struct ChatView: View
 				.disabled(model.isGenerating)
 			}
 		}
-		// iOS はキーボードが出ると下タブが隠れる。畳む手段が無いと画面を
-		// 移れなくなるので必ず付ける（KeyboardDismiss.swift を参照）。
-		.dismissibleKeyboard()
 		.alert(
 			"エラー",
 			isPresented: Binding(
@@ -85,6 +82,9 @@ struct ChatView: View
 				}
 				.padding()
 			}
+			// 答えを読もうとして履歴を指で引く動きが、そのままキーボードを
+			// どかす操作になる。
+			.scrollDismissesKeyboard(.interactively)
 			// 生成中は届いたトークンを追って一番下へ寄せ続ける。長さの合計を
 			// 見ているのは、推論モデルが**思考だけを伸ばしている間**（本文は空の
 			// まま）もスクロールを追従させるため。
@@ -187,6 +187,30 @@ struct ChatView: View
 					model.send()
 					inputFocused = false
 				}
+			#if os(iOS)
+				// キーボードを畳むボタンは**入力欄の並びに置く**。
+				//
+				// キーボード上のツールバー（ToolbarItemGroup(placement: .keyboard)）
+				// でも畳めるが、あれはキーボードの上端に貼り付くので、下に固定して
+				// ある送信ボタンとちょうど重なる。「畳まないと送信できない」という
+				// 本末転倒になったので、この画面ではツールバーを使わない。
+				// 入力欄のある他の画面（設定・ベンチマーク）は下に固定のボタンが
+				// 無いのでツールバー方式のまま（KeyboardDismiss.swift）。
+				if inputFocused
+				{
+					Button
+					{
+						inputFocused = false
+					} label: {
+						Label("キーボードを閉じる", systemImage: "keyboard.chevron.compact.down")
+							.labelStyle(.iconOnly)
+							.font(.title2)
+					}
+					.buttonStyle(.borderless)
+					.foregroundStyle(.secondary)
+					.transition(.scale.combined(with: .opacity))
+				}
+			#endif
 			Button
 			{
 				model.send()
@@ -203,5 +227,6 @@ struct ChatView: View
 				|| model.isGenerating)
 		}
 		.padding()
+		.animation(.easeOut(duration: 0.15), value: inputFocused)
 	}
 }
