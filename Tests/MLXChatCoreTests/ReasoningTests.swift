@@ -199,4 +199,62 @@ final class ReasoningTests: XCTestCase
 			ChatMessage.self, from: try JSONEncoder().encode(message))
 		XCTAssertEqual(decoded, message)
 	}
+
+	// -----------------------------------------------------------------
+	// 開閉の記憶（ReasoningDisclosure）
+	// -----------------------------------------------------------------
+
+	/// 既定は畳む。**自動では開かない**ことがこの型の要点で、生成の途中で
+	/// 勝手に開閉すると履歴の高さが一度に変わり、スクロール位置が内容より
+	/// 下へ飛んで画面が空白になる（実機で踏んだ）。
+	func testReasoningIsCollapsedByDefault()
+	{
+		let disclosure = ReasoningDisclosure()
+		XCTAssertFalse(disclosure.isExpanded(UUID()))
+		XCTAssertEqual(disclosure.expandedCount, 0)
+	}
+
+	/// 利用者が開いたら、そのまま覚えている（生成が終わっても畳まない）。
+	func testRemembersUserChoicePerMessage()
+	{
+		let opened = UUID()
+		let untouched = UUID()
+		var disclosure = ReasoningDisclosure()
+		disclosure.setExpanded(true, for: opened)
+
+		XCTAssertTrue(disclosure.isExpanded(opened))
+		XCTAssertFalse(disclosure.isExpanded(untouched))
+		XCTAssertEqual(disclosure.expandedCount, 1)
+
+		disclosure.setExpanded(false, for: opened)
+		XCTAssertFalse(disclosure.isExpanded(opened))
+		XCTAssertEqual(disclosure.expandedCount, 0)
+	}
+
+	/// 会話を切り替えたら忘れる（発言の id は会話をまたいで再利用しない）。
+	func testResetForgetsEverything()
+	{
+		let id = UUID()
+		var disclosure = ReasoningDisclosure()
+		disclosure.setExpanded(true, for: id)
+		disclosure.reset()
+		XCTAssertFalse(disclosure.isExpanded(id))
+		XCTAssertEqual(disclosure.expandedCount, 0)
+	}
+
+	/// 画面（ChatView）は開閉が変わったことを Equatable で見て末尾へ寄せ直す。
+	/// 等しさが壊れるとその寄せ直しが起きなくなるので、ここで固定しておく。
+	func testDisclosureIsEquatable()
+	{
+		let id = UUID()
+		var one = ReasoningDisclosure()
+		var other = ReasoningDisclosure()
+		XCTAssertEqual(one, other)
+
+		one.setExpanded(true, for: id)
+		XCTAssertNotEqual(one, other)
+
+		other.setExpanded(true, for: id)
+		XCTAssertEqual(one, other)
+	}
 }

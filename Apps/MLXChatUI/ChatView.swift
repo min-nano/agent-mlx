@@ -76,9 +76,17 @@ struct ChatView: View
 						MessageRow(
 							message: message,
 							isStreaming: model.isGenerating
-								&& message.id == model.conversation.messages.last?.id)
+								&& message.id == model.conversation.messages.last?.id,
+							isReasoningExpanded: reasoningBinding(for: message.id))
 							.id(message.id)
 					}
+					// 末尾の目印。高さゼロで内容の一番下に必ず居るので、
+					// ここへ寄せることは「内容の終わりへ行く」と同じ意味になる。
+					// 発言そのもの（高さが刻々と変わる・LazyVStack だと画面外で
+					// 消える）を目標にすると、寄せた先が内容より下になり得る。
+					Color.clear
+						.frame(height: 1)
+						.id(Self.bottomAnchor)
 				}
 				.padding()
 			}
@@ -101,19 +109,45 @@ struct ChatView: View
 			// 生成中は届いたトークンを追って一番下へ寄せ続ける。長さの合計を
 			// 見ているのは、推論モデルが**思考だけを伸ばしている間**（本文は空の
 			// まま）もスクロールを追従させるため。
+			//
+			// アニメーションを付けないのは、寄せる先が毎トークン動くため —
+			// 動く目標へ 0.15 秒かけて滑らせると、着く前に次の指示が来て
+			// 追いつけなくなる。ここは「常に末尾に居る」ことだけが要る。
 			.onChange(of: streamedLength)
 			{
-				guard let last = model.conversation.messages.last
+				proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+			}
+			// 思考を開閉すると高さが画面数枚ぶん変わる。畳んだ側では内容が
+			// 一気に短くなるので、寄せ直さないとスクロール位置が内容より下に
+			// 取り残されうる。ただし**生成中だけ**にする — 生成していないときに
+			// 寄せると、履歴の上のほうの思考を開いただけで末尾へ飛ばされて
+			// しまい、読んでいる場所を奪うことになる。
+			.onChange(of: model.reasoningDisclosure)
+			{
+				guard model.isGenerating
 				else
 				{
 					return
 				}
-				withAnimation(.easeOut(duration: 0.15))
-				{
-					proxy.scrollTo(last.id, anchor: .bottom)
-				}
+				proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+			}
+			// 発言が増えたとき（送信直後）も末尾へ。
+			.onChange(of: model.conversation.messages.count)
+			{
+				proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
 			}
 		}
+	}
+
+	/// 履歴の一番下に置く目印の id。
+	private static let bottomAnchor = "transcript-bottom"
+
+	/// 思考の開閉を ChatViewModel（が持つ Core の ReasoningDisclosure）へ橋渡しする。
+	private func reasoningBinding(for id: UUID) -> Binding<Bool>
+	{
+		Binding(
+			get: { model.reasoningDisclosure.isExpanded(id) },
+			set: { model.reasoningDisclosure.setExpanded($0, for: id) })
 	}
 
 	private var emptyState: some View

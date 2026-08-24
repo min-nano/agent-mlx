@@ -179,3 +179,58 @@ public struct ReasoningSplitter: Equatable, Sendable
 		return 0
 	}
 }
+
+/// 思考（`<think>`）を開いて見せるか畳むかの記憶。
+///
+/// **自動では開閉しない** — 開閉が変わるのは利用者が操作したときだけ。
+/// これは好みの問題ではなく、表示の安定性のための決定です。
+///
+/// 以前は「考えている間は開く・答えが出たら畳む」という自動の切り替えを
+/// 入れていたが、実機で次のことが起きた:
+///
+/// * 思考は数千文字になる。開いた状態の吹き出しは画面数枚ぶんの高さになる。
+/// * 履歴（`ChatView.transcript`）はトークンが届くたびに末尾へ寄せ続けている。
+/// * 答えの最初のトークンが届いた瞬間に自動で畳むと、**その高さが一度に消える**。
+///   寄せる先の座標は縮む前のもののままなので、内容より下へ飛んでしまい、
+///   画面が真っ黒（空白）になる。
+///
+/// 縮み方が大きいほど戻れなくなるので、「自動で縮めない」と決めるのが唯一の
+/// 確実な直し方でした。開いたまま読みたい人は自分で開く（その選択はこの型が
+/// 覚えていて、生成が終わっても勝手に閉じない）。
+///
+/// 記憶を画面（`MessageRow` の `@State`）ではなくここに置いているのも同じ理由で、
+/// `LazyVStack` は画面外へ出た行の `@State` を捨てることがある。捨てられると
+/// 開いていた思考が勝手に畳まれ、上と同じ「高さが一度に消える」が起きる。
+public struct ReasoningDisclosure: Equatable, Sendable
+{
+	/// 利用者が明示的に選んだ発言（true = 開く）。載っていない発言は畳んだまま。
+	private var choices: [UUID: Bool] = [:]
+
+	public init()
+	{
+	}
+
+	/// この発言の思考を開いて見せるか。既定は畳む。
+	public func isExpanded(_ id: UUID) -> Bool
+	{
+		choices[id] ?? false
+	}
+
+	/// 利用者の操作を覚える。
+	public mutating func setExpanded(_ expanded: Bool, for id: UUID)
+	{
+		choices[id] = expanded
+	}
+
+	/// 覚えていることを捨てる（会話を切り替えたとき）。
+	public mutating func reset()
+	{
+		choices.removeAll()
+	}
+
+	/// 開いている発言の数。テストと、必要になったときの一括操作のため。
+	public var expandedCount: Int
+	{
+		choices.values.filter { $0 }.count
+	}
+}

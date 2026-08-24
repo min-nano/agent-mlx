@@ -40,6 +40,13 @@ final class ChatViewModel: ObservableObject
 	@Published private(set) var device = DeviceProfile.current()
 	/// ダウンロード済みモデル（設定画面の一覧）。
 	@Published private(set) var downloadedModels: [DownloadedModel] = []
+	/// 思考（<think>）を開いている発言。判断（既定は畳む・自動では開閉しない）は
+	/// Core の ReasoningDisclosure が持ち、ここは覚えておく場所を用意するだけ。
+	///
+	/// 行（MessageRow）の @State にしないのは、LazyVStack が画面外の行の状態を
+	/// 捨てることがあるため。捨てられると開いていた思考が勝手に畳まれ、履歴の
+	/// 高さが一度に縮んでスクロール位置が内容より下へ飛ぶ（実機で踏んだ）。
+	@Published var reasoningDisclosure = ReasoningDisclosure()
 
 	var isGenerating: Bool { phase != nil }
 
@@ -107,6 +114,7 @@ final class ChatViewModel: ObservableObject
 	func newConversation()
 	{
 		stop()
+		reasoningDisclosure.reset()
 		conversation = Conversation(
 			systemPrompt: conversation.systemPrompt,
 			modelID: conversation.modelID)
@@ -115,6 +123,7 @@ final class ChatViewModel: ObservableObject
 	func open(_ conversation: Conversation)
 	{
 		stop()
+		reasoningDisclosure.reset()
 		self.conversation = conversation
 	}
 

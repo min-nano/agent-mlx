@@ -5,7 +5,8 @@
 //  「答えの良さ」と「出るまでの速さ」を同じ画面で見比べられるようにしてある。
 //
 //  推論モデル（Qwen3 / SmolLM3 など）の思考は答えの上に**畳んで**出す。切り分け
-//  そのものは Core（ReasoningSplitter）が済ませていて、ここは開閉するだけ。
+//  そのものは Core（ReasoningSplitter）が済ませていて、開いているかどうかも
+//  Core（ReasoningDisclosure）が覚えている。この行がするのは表示だけ。
 //
 
 import SwiftUI
@@ -15,13 +16,9 @@ struct MessageRow: View
 	let message: ChatMessage
 	/// 生成中の発言（本文がまだ増えている途中）か。
 	let isStreaming: Bool
-
-	/// 利用者が開閉を操作したか（nil なら自動）。
-	///
-	/// 既定の挙動を「考えている間は開く・答えが出たら畳む」にしておくと、待ち時間に
-	/// 何が起きているかが見えて、読むときには邪魔にならない。ただし一度でも手で
-	/// 操作したらそちらを優先する — 勝手に閉じられるのは煩わしいため。
-	@State private var expandedByUser: Bool?
+	/// 思考を開いているか。ChatViewModel が持つ ReasoningDisclosure への窓口で、
+	/// この行は @State を持たない（理由は ReasoningDisclosure のコメント）。
+	@Binding var isReasoningExpanded: Bool
 
 	var body: some View
 	{
@@ -53,17 +50,10 @@ struct MessageRow: View
 
 	// -----------------------------------------------------------------
 
-	private var isExpanded: Binding<Bool>
-	{
-		Binding(
-			get: { expandedByUser ?? (isStreaming && message.text.isEmpty) },
-			set: { expandedByUser = $0 })
-	}
-
 	@ViewBuilder
 	private var reasoning: some View
 	{
-		DisclosureGroup(isExpanded: isExpanded)
+		DisclosureGroup(isExpanded: $isReasoningExpanded)
 		{
 			Text(message.reasoning ?? "")
 				.font(.callout)
