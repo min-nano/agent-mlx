@@ -82,8 +82,21 @@ struct ChatView: View
 				}
 				.padding()
 			}
-			// 答えを読もうとして履歴を指で引く動きが、そのままキーボードを
-			// どかす操作になる。
+			// キーボードを畳む手段はこの 2 つ。**入力欄の外を触ったら閉じる**が
+			// 主で、引き下げはその補助。
+			//
+			// 専用のボタンは置かない。入力欄の並びに置くと入力欄が狭くなり、
+			// キーボード上のツールバーに置くと送信ボタンと重なる（どちらも
+			// 実機で試して駄目だった）。「読むために画面を触ったら引っ込む」の
+			// ほうが、ボタンを探すより自然でもある。
+			.simultaneousGesture(TapGesture().onEnded
+			{
+				// simultaneousGesture なので、スクロールも吹き出しの
+				// 折りたたみ（思考の開閉）も従来どおり効く。
+				#if os(iOS)
+					inputFocused = false
+				#endif
+			})
 			.scrollDismissesKeyboard(.interactively)
 			// 生成中は届いたトークンを追って一番下へ寄せ続ける。長さの合計を
 			// 見ているのは、推論モデルが**思考だけを伸ばしている間**（本文は空の
@@ -187,30 +200,6 @@ struct ChatView: View
 					model.send()
 					inputFocused = false
 				}
-			#if os(iOS)
-				// キーボードを畳むボタンは**入力欄の並びに置く**。
-				//
-				// キーボード上のツールバー（ToolbarItemGroup(placement: .keyboard)）
-				// でも畳めるが、あれはキーボードの上端に貼り付くので、下に固定して
-				// ある送信ボタンとちょうど重なる。「畳まないと送信できない」という
-				// 本末転倒になったので、この画面ではツールバーを使わない。
-				// 入力欄のある他の画面（設定・ベンチマーク）は下に固定のボタンが
-				// 無いのでツールバー方式のまま（KeyboardDismiss.swift）。
-				if inputFocused
-				{
-					Button
-					{
-						inputFocused = false
-					} label: {
-						Label("キーボードを閉じる", systemImage: "keyboard.chevron.compact.down")
-							.labelStyle(.iconOnly)
-							.font(.title2)
-					}
-					.buttonStyle(.borderless)
-					.foregroundStyle(.secondary)
-					.transition(.scale.combined(with: .opacity))
-				}
-			#endif
 			Button
 			{
 				model.send()
@@ -227,6 +216,5 @@ struct ChatView: View
 				|| model.isGenerating)
 		}
 		.padding()
-		.animation(.easeOut(duration: 0.15), value: inputFocused)
 	}
 }
