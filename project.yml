@@ -46,13 +46,14 @@ settings:
     SWIFT_STRICT_CONCURRENCY: minimal
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "0"
-    # 署名しない。Apple Developer 証明書を CI に置かない方針なので、
-    # macOS 版はビルド後に ad-hoc 署名（codesign --sign -）を付け、
-    # iOS 版は未署名の .ipa として配る（README の導入手順を参照）。
-    CODE_SIGN_IDENTITY: ""
-    CODE_SIGNING_REQUIRED: "NO"
-    CODE_SIGNING_ALLOWED: "NO"
-    CODE_SIGN_ENTITLEMENTS: ""
+    # 署名は「自動」にしておく。**署名を切るのはビルドの都合であって
+    # プロジェクトの性質ではない**ので、ここには書かない。
+    #
+    # ここで CODE_SIGNING_ALLOWED=NO を宣言してしまうと、手元の Xcode から
+    # 自分の Apple ID で実機へ入れることができなくなる（未署名のアプリは
+    # iOS がインストールを拒否する）。証明書を持たない CI 側だけが
+    # scripts/xcode-build.sh のコマンドラインで署名を切る。
+    CODE_SIGN_STYLE: Automatic
     # SwiftPM のビルドツールプラグイン（mlx-swift の CudaBuild など）が
     # サンドボックスに引っかからないようにする。
     ENABLE_USER_SCRIPT_SANDBOXING: "NO"

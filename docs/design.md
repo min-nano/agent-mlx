@@ -320,9 +320,16 @@ Apple Developer 証明書を CI に置かない方針です。結果として:
 - **macOS 版**は ad-hoc 署名（`codesign --sign -`）。Apple Silicon はすべての
   Mach-O に署名を要求するので、これは必須です。公証はしていないので初回起動時に
   Gatekeeper の回避操作が要ります。
-- **iOS 版の `.ipa` は未署名**。そのままでは iPhone に入りません（README の導入
-  手順を参照）。`xcodebuild -exportArchive` は署名を要求するので使えず、
-  `scripts/package-ipa.sh` が `Payload/` に `.app` を入れて zip しています。
+- **iOS 版の `.ipa` は未署名**。そのままでは iPhone に入りません
+  （[install-ios.md](install-ios.md) を参照）。`xcodebuild -exportArchive` は
+  署名を要求するので使えず、`scripts/package-ipa.sh` が `Payload/` に `.app` を
+  入れて zip しています。
+
+署名を切る指定は **`scripts/xcode-build.sh` のコマンドラインにしか置きません**。
+`project.yml`（＝プロジェクトの性質）に書くと、手元の Xcode から自分の Apple ID
+で実機へ入れることができなくなります — iOS は未署名アプリのインストールを拒否
+するからです。署名を切るのは「証明書を持たない CI でビルドする」という**その
+呼び出しの都合**であって、プロジェクトの性質ではありません。
 
 ### iOS に自動アップデートが無い理由
 
@@ -363,4 +370,5 @@ Apple Developer 証明書を CI に置かない方針です。結果として:
 | `UpdaterService` が探す `install-update.sh` | `project.yml` の resources 指定 | 自動アップデートが「アプリバンドルではない」と言って止まる |
 | `ModelStorage.directory(for:)` | `MLXLMCommon` の `defaultHubApi` | ダウンロード済みなのに一覧に出ない／消しても減らない |
 | `scripts/xcode-build.sh` | `build.yml` と `ci-debug-job.sh` | 「CI では通るが調査では落ちる」（逆も） |
+| `project.yml`（署名を切る指定を**書かない**） | `scripts/xcode-build.sh`（切るのはここだけ） | project.yml 側に書くと、手元の Xcode から実機へ入れられなくなる（未署名アプリは iOS が拒否する） |
 | カバレッジの除外リスト | 「その層に判断を置かない」という約束 | 除外した層に判断が溜まっても誰も気づかない |

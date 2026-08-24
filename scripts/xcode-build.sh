@@ -31,6 +31,14 @@ SPM="${SPM_DIR:-$PWD/.spm}"
 
 [ -d MLXChat.xcodeproj ] || scripts/generate-xcodeproj.sh
 
+# なぜ署名を切るか:
+#   Apple Developer 証明書を CI に置かない方針なので、ここでは署名せずに
+#   ビルドする（macOS 版はこの後 ad-hoc 署名を付け、iOS 版は未署名の .ipa と
+#   して配る）。**この指定を project.yml へ書いてはいけない** — プロジェクト
+#   自体が「署名しない」になると、手元の Xcode から自分の Apple ID で実機へ
+#   入れられなくなる（iOS は未署名アプリのインストールを拒否する）。
+#   署名を切るのはこのビルド呼び出しの都合であって、プロジェクトの性質ではない。
+#
 # なぜ検証をスキップするか:
 #   * -skipPackagePluginValidation … mlx-swift の Cmlx ターゲットはビルドツール
 #     プラグイン（CudaBuild）を宣言している。Xcode はプラグインの実行前に
@@ -49,4 +57,9 @@ exec xcodebuild build \
 	-clonedSourcePackagesDirPath "$SPM" \
 	-skipPackagePluginValidation \
 	-skipMacroValidation \
+	CODE_SIGNING_ALLOWED=NO \
+	CODE_SIGNING_REQUIRED=NO \
+	CODE_SIGN_IDENTITY= \
+	CODE_SIGN_ENTITLEMENTS= \
+	DEVELOPMENT_TEAM= \
 	"$@"

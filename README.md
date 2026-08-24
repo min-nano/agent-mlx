@@ -74,14 +74,28 @@ sudo ln -sf /Applications/MLXChat.app/Contents/MacOS/mlxchat-cli /usr/local/bin/
 
 ### iOS
 
-`MLXChat.ipa` は**未署名**です。Apple Developer 証明書を CI に置かない方針なので、
-そのままでは iPhone に入りません。次のどちらかで導入してください。
+**📱 手順の詳細 → [docs/install-ios.md](docs/install-ios.md)**
 
-- **自分の Apple ID で署名する**（無料。7 日ごとに再署名が必要）
-  [Sideloadly](https://sideloadly.io/) や [AltStore](https://altstore.io/) に
-  `.ipa` を渡すと、無料の開発者アカウントで署名して転送してくれます。
-- **自分で Xcode からビルドする**（下の「自分でビルドする」）。手元に Apple ID を
-  設定した Xcode があるなら、こちらが一番手早いです。
+Apple Developer 証明書を CI に置かない方針なので、`MLXChat.ipa` は**未署名**です。
+そのままでは iPhone に入りません。入れ方は 2 通りあります。
+
+| | 方法 A: Xcode からビルド | 方法 B: `.ipa` に署名 |
+| --- | --- | --- |
+| 必要なもの | Apple Silicon Mac + Xcode | Mac / Windows + [Sideloadly](https://sideloadly.io/) や [AltStore](https://altstore.io/) |
+| 初回 | **30 分以上**（MLX を丸ごとビルド） | 5 分ほど |
+| コードを直せる | ○ | × |
+
+手元に Xcode があるなら方法 A が確実です。どちらの場合も、
+
+- iPhone を**デベロッパモード**にする（設定 → プライバシーとセキュリティ）
+- 初回起動前に**開発者を信頼**する（設定 → 一般 → VPN とデバイス管理）
+
+が必要です。無料の Apple ID で署名したアプリは **7 日で起動できなくなります**
+（入れ直せば復活し、会話とダウンロード済みモデルは残ります）。
+
+> **速度を測るなら Release ビルドで。** Xcode の ⌘R は既定で Debug ビルドを
+> 使い、最適化なしなので tok/s が実力より大きく落ちます。手順は
+> [docs/install-ios.md](docs/install-ios.md) の手順 6 にあります。
 
 > **iOS 版に自動アップデートはありません。** iOS ではアプリが自分自身を
 > 差し替えられないためです（新しいビルドは入れ直してください）。
@@ -235,6 +249,9 @@ scripts/generate-xcodeproj.sh   # project.yml → MLXChat.xcodeproj（XcodeGen�
 open MLXChat.xcodeproj
 ```
 
+iPhone の実機へ入れる手順（署名・デベロッパモード・Release ビルド）は
+[docs/install-ios.md](docs/install-ios.md) にまとめてあります。
+
 スキームは 3 つです。
 
 | スキーム | 対象 |
@@ -272,8 +289,9 @@ Apps/             Xcode プロジェクトがビルドする層。ここだけ�
 Tests/            swift test（純ロジックだけ）
 packaging/        Info.plist・アイコン（生成物）
 scripts/          プロジェクト生成・スタンプ・ipa 化・CI デバッグ・CI 待機
-docs/design.md    設計ノート（なぜこの形なのか）
-docs/roadmap.md   この先やりたいこと
+docs/design.md      設計ノート（なぜこの形なのか）
+docs/install-ios.md iPhone に入れる手順
+docs/roadmap.md     この先やりたいこと
 project.yml       Xcode プロジェクトの唯一の定義（XcodeGen）
 ```
 
@@ -289,7 +307,8 @@ project.yml       Xcode プロジェクトの唯一の定義（XcodeGen）
 - **意図的にやらなかったこと**と、その理由
 - 片方だけ変えると壊れる「対」の一覧
 
-作業時の規則は [CLAUDE.md](CLAUDE.md)、この先の候補は
+作業時の規則は [CLAUDE.md](CLAUDE.md)、iPhone への導入手順は
+[docs/install-ios.md](docs/install-ios.md)、この先の候補は
 [docs/roadmap.md](docs/roadmap.md) にあります。
 
 ## CI
