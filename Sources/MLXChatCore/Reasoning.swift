@@ -74,6 +74,15 @@ public struct ReasoningSplitter: Equatable, Sendable
 	/// いま `<think>` の内側にいるか。
 	public private(set) var isInsideReasoning = false
 
+	/// 本文・思考それぞれについて、空白以外を 1 文字でも出したか。
+	/// 出すまでの空白は捨てる（＝先頭の空行を作らない）。
+	private var answerHasContent = false
+	private var reasoningHasContent = false
+	/// 出すのを保留している末尾の空白。次に空白以外が来たら一緒に出し、
+	/// 来なければそのまま捨てる（＝末尾の空行を作らない）。
+	private var heldAnswerSpace = ""
+	private var heldReasoningSpace = ""
+
 	public init() {}
 
 	/// 断片を食わせて、確定したぶんを受け取る。
@@ -95,14 +104,7 @@ public struct ReasoningSplitter: Equatable, Sendable
 				break
 			}
 			let head = String(pending[pending.startIndex ..< range.lowerBound])
-			if isInsideReasoning
-			{
-				result.reasoning += head
-			}
-			else
-			{
-				result.answer += head
-			}
+			emit(head, into: &result)
 			pending = String(pending[range.upperBound...])
 			isInsideReasoning.toggle()
 		}
@@ -115,15 +117,74 @@ public struct ReasoningSplitter: Equatable, Sendable
 		let held = ReasoningSplitter.partialTagLength(atEndOf: pending, of: tag)
 		let settled = String(pending.dropLast(held))
 		pending = String(pending.suffix(held))
+		emit(settled, into: &result)
+		return result
+	}
+
+	/// 確定した断片を、いまの状態に応じて本文か思考へ足す。
+	///
+	/// ここを通すことで、前後の空白の扱いが 1 か所に閉じる。
+	private mutating func emit(_ text: String, into result: inout ReasoningText)
+	{
+		guard !text.isEmpty
+		else
+		{
+			return
+		}
 		if isInsideReasoning
 		{
-			result.reasoning += settled
+			ReasoningSplitter.append(
+				text,
+				to: &result.reasoning,
+				hasContent: &reasoningHasContent,
+				held: &heldReasoningSpace)
 		}
 		else
 		{
-			result.answer += settled
+			ReasoningSplitter.append(
+				text,
+				to: &result.answer,
+				hasContent: &answerHasContent,
+				held: &heldAnswerSpace)
 		}
-		return result
+	}
+
+	/// 前後の空白を落としながら足す。**間の空白は保つ**。
+	///
+	/// なぜ要るか: 推論モデルは `</think>` のあとに改行を 2 つ置いてから答えを
+	/// 書き始めるので、素直に流すと吹き出しの先頭に空行ができる（実機で見えた）。
+	/// 逆に末尾の改行は吹き出しの下に余白を作る。
+	///
+	/// ストリーミングでは「これが最後の断片か」が分からないので、
+	/// `trimmingCharacters` は使えない。代わりに
+	///
+	///   * 空白以外をまだ 1 文字も出していない間は、先頭の空白を捨てる
+	///   * 末尾の空白は**保留**し、次に空白以外が来たときに一緒に出す
+	///
+	/// とする。保留のまま生成が終われば、その空白は出ないまま消える。
+	/// 結果は `trimmingCharacters(in: .whitespacesAndNewlines)` と同じで、
+	/// しかも途中経過の見え方が最終形と食い違わない。
+	private static func append(
+		_ text: String,
+		to destination: inout String,
+		hasContent: inout Bool,
+		held: inout String)
+	{
+		let body = text.drop(while: { $0.isWhitespace })
+		if hasContent
+		{
+			// 直前に確定した文字があるなら、間の空白として保留に足す。
+			held += text.prefix(text.count - body.count)
+		}
+		guard !body.isEmpty
+		else
+		{
+			return
+		}
+		let trailing = body.reversed().prefix(while: { $0.isWhitespace }).count
+		destination += held + String(body.dropLast(trailing))
+		held = String(body.suffix(trailing))
+		hasContent = true
 	}
 
 	/// 保留していた末尾を吐き出して空にする。生成の終わりに 1 回呼ぶ。
@@ -134,14 +195,9 @@ public struct ReasoningSplitter: Equatable, Sendable
 	{
 		let remaining = pending
 		pending = ""
-		guard !remaining.isEmpty
-		else
-		{
-			return ReasoningText()
-		}
-		return isInsideReasoning
-			? ReasoningText(reasoning: remaining)
-			: ReasoningText(answer: remaining)
+		var result = ReasoningText()
+		emit(remaining, into: &result)
+		return result
 	}
 
 	/// 全文を一度に切り分ける（保存済みの本文を読み直すとき用）。

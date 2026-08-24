@@ -71,6 +71,11 @@ final class ReasoningTests: XCTestCase
 			"<think>閉じないまま終わる",
 			"< think > はタグではない",
 			"不等号 5 < 7 と </think っぽい何か",
+			// 前後の空白の扱いも、逐次と全文で一致していなければならない。
+			"<think>\n考える\n</think>\n\n答え\n",
+			"\n\n  前後に空白  \n\n",
+			"前 <think>中</think> 後",
+			"   ",
 		]
 		for sample in samples
 		{
@@ -96,6 +101,49 @@ final class ReasoningTests: XCTestCase
 		XCTAssertEqual(splitter.flush(), ReasoningText(answer: "<thi"))
 		// flush 後は空になる。
 		XCTAssertEqual(splitter.flush(), ReasoningText())
+	}
+
+	// -----------------------------------------------------------------
+	// 前後の空白
+	// -----------------------------------------------------------------
+
+	/// 推論モデルは `</think>` のあとに改行を置いてから答えを書き始める。
+	/// そのまま流すと吹き出しの先頭に空行ができる（実機で見えた）。
+	func testBlankLinesAroundTheAnswerAreDropped()
+	{
+		let result = ReasoningSplitter.split("<think>\n考える\n</think>\n\nこんにちは！\n")
+		XCTAssertEqual(result.answer, "こんにちは！")
+		XCTAssertEqual(result.reasoning, "考える")
+	}
+
+	/// 落とすのは前後だけ。段落の区切り（間の空行）は残す。
+	func testBlankLinesInsideTheAnswerAreKept()
+	{
+		let result = ReasoningSplitter.split("\n一段落目\n\n二段落目\n\n")
+		XCTAssertEqual(result.answer, "一段落目\n\n二段落目")
+	}
+
+	/// ストリーミングでも同じ結果になること。末尾の空白は「次に空白以外が
+	/// 来たら出す」保留にしてあるので、`trimmingCharacters` を使わずに済む。
+	func testTrailingWhitespaceIsHeldUntilMoreTextArrives()
+	{
+		var splitter = ReasoningSplitter()
+		XCTAssertEqual(splitter.consume("\n\n答え"), ReasoningText(answer: "答え"))
+		// 改行だけの断片は、この時点では何も出さない。
+		XCTAssertEqual(splitter.consume("\n\n"), ReasoningText())
+		// 続きが来たら、保留していた改行ごと出す。
+		XCTAssertEqual(splitter.consume("続き"), ReasoningText(answer: "\n\n続き"))
+		// 来なければ出ないまま終わる。
+		XCTAssertEqual(splitter.consume("\n"), ReasoningText())
+		XCTAssertEqual(splitter.flush(), ReasoningText())
+	}
+
+	/// 空白しか無い応答は空のまま（空白 1 つの本文を作らない）。
+	func testWhitespaceOnlyOutputStaysEmpty()
+	{
+		let result = ReasoningSplitter.split("<think>考えただけ</think>\n\n")
+		XCTAssertEqual(result.answer, "")
+		XCTAssertEqual(result.reasoning, "考えただけ")
 	}
 
 	func testUnclosedBlockStaysReasoning()
