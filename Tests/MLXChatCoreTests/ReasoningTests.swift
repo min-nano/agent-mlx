@@ -46,18 +46,29 @@ final class ReasoningTests: XCTestCase
 		XCTAssertTrue(result.hasReasoning)
 	}
 
-	func testTextBeforeAndAfterTheBlock()
+	/// 思考は**応答の冒頭**にしか無い。本文が始まったあとのタグは文字列。
+	/// タグの前に本文があるなら、それは思考の始まりではない。
+	func testTagAfterTheAnswerStartedIsJustText()
 	{
 		let result = ReasoningSplitter.split("前<think>中</think>後")
-		XCTAssertEqual(result.answer, "前後")
-		XCTAssertEqual(result.reasoning, "中")
+		XCTAssertEqual(result.answer, "前<think>中</think>後")
+		XCTAssertEqual(result.reasoning, "")
 	}
 
-	func testMultipleBlocks()
+	/// 思考は 1 応答に 1 つ。2 つ目のブロックは本文としてそのまま出す。
+	func testOnlyTheLeadingBlockIsAThought()
 	{
 		let result = ReasoningSplitter.split("<think>A</think>1<think>B</think>2")
-		XCTAssertEqual(result.reasoning, "AB")
-		XCTAssertEqual(result.answer, "12")
+		XCTAssertEqual(result.reasoning, "A")
+		XCTAssertEqual(result.answer, "1<think>B</think>2")
+	}
+
+	/// 開きタグの前の**空白**は本文と数えない（`\n<think>` は普通に来る）。
+	func testWhitespaceBeforeTheOpenTagIsNotContent()
+	{
+		let result = ReasoningSplitter.split("\n\n<think>考える</think>答え")
+		XCTAssertEqual(result.reasoning, "考える")
+		XCTAssertEqual(result.answer, "答え")
 	}
 
 	func testStreamingCharacterByCharacterMatchesWholeText()
@@ -80,6 +91,8 @@ final class ReasoningTests: XCTestCase
 			"<think>考える</think>答え。\n</think>\n続き",
 			"<think>考え<think>まだ考え</think>答え",
 			"</think>いきなり閉じる",
+			"<think>答える</think>本文が <think> に言及する",
+			"\n\n<think>考える</think>答え",
 		]
 		for sample in samples
 		{
@@ -111,34 +124,32 @@ final class ReasoningTests: XCTestCase
 	// 壊れたタグの並び
 	// -----------------------------------------------------------------
 
-	/// 小さいモデルが壊れると `</think>` を 2 回出すことがある。閉じているのに
-	/// もう一度閉じられた形で、片方のタグしか探していないと**タグがそのまま
-	/// 本文に出る**（実機で見えた）。タグは本文にも思考にも出さない。
-	func testStrayCloseTagIsNotShown()
+	/// 小さいモデルが壊れると `</think>` を 2 回出すことがある（実機で見えた）。
+	/// 思考はもう閉じているので、2 度目はただの文字列として本文に出す。
+	/// 消してしまうと、本文がタグの文字列に言及しただけのときに文が欠ける。
+	func testStrayCloseTagIsShownAsText()
 	{
 		let result = ReasoningSplitter.split("<think>考える</think>答え。\n</think>\n続き")
 		XCTAssertEqual(result.reasoning, "考える")
-		XCTAssertEqual(result.answer, "答え。\n\n続き")
-		XCTAssertFalse(result.answer.contains("think"), result.answer)
+		XCTAssertEqual(result.answer, "答え。\n</think>\n続き")
 	}
 
-	/// 思考の外側で閉じタグが割れて届いても取りこぼさない。
-	/// （`</th` は `<think>` の接頭辞ではないので、開きタグだけを見ていると漏れる）
-	func testSplitCloseTagOutsideReasoningIsStillATag()
+	/// 本文がタグの文字列そのものに言及しても、以降が思考へ飲まれない。
+	/// タグとして出したのか文字として書いたのかは、復号後の文字列では区別が
+	/// 付かない（エスケープが無い）。間違えたときの損が小さいほうを選んでいる。
+	func testAnswerCanTalkAboutTheTags()
 	{
-		var splitter = ReasoningSplitter()
-		XCTAssertEqual(
-			splitter.consume("<think>思考</think>答え</th"),
-			ReasoningText(answer: "答え", reasoning: "思考"))
-		XCTAssertEqual(splitter.consume("ink>続き"), ReasoningText(answer: "続き"))
-		XCTAssertEqual(splitter.flush(), ReasoningText())
+		let result = ReasoningSplitter.split(
+			"<think>答える</think>推論モデルは <think> を出します。説明は続きます。")
+		XCTAssertEqual(result.reasoning, "答える")
+		XCTAssertEqual(result.answer, "推論モデルは <think> を出します。説明は続きます。")
 	}
 
-	/// 開いているのにもう一度開かれた場合も、状態が変わらないだけ。
-	func testStrayOpenTagIsNotShown()
+	/// 思考の中の `<think>` も文字列。探しているのは閉じタグだけ。
+	func testOpenTagInsideTheThoughtIsJustText()
 	{
 		let result = ReasoningSplitter.split("<think>考え<think>まだ考え</think>答え")
-		XCTAssertEqual(result.reasoning, "考えまだ考え")
+		XCTAssertEqual(result.reasoning, "考え<think>まだ考え")
 		XCTAssertEqual(result.answer, "答え")
 	}
 

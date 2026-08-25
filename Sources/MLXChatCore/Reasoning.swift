@@ -69,10 +69,37 @@ public struct ReasoningSplitter: Equatable, Sendable
 	/// 思考の終了タグ。
 	public static let closeTag = "</think>"
 
+	/// タグの探し方。**思考は応答の先頭に 1 度だけ来る**、という前提を型にしてある。
+	///
+	/// 「いつでもタグを探す」をやめた理由は、本文がタグの文字列そのものに言及
+	/// できるから。`<think>` / `</think>` は特殊トークンだが、エンジンから届く
+	/// のは復号済みの文字列で、モデルが**タグとして**出したものと**文字として**
+	/// 書いたものが同じ 8 文字に潰れている。エスケープは無いので、文字列だけを
+	/// 見て区別する方法は原理的に無い。
+	///
+	/// そこで「どちらの可能性が高いか」ではなく「間違えたときの損が小さいほう」
+	/// で決める。思考は必ず応答の冒頭に来るので、**本文が始まったあとのタグは
+	/// 文字列と断定してよい**。こうすると
+	///
+	///   * 本文中の `<think>` で以降の本文が丸ごと思考の箱へ消える、が起きない
+	///   * 壊れたモデルが 2 度目の `</think>` を出しても、ただの文字として出る
+	///
+	/// となり、取りこぼしても「タグが 1 つ画面に出る」で済む。
+	private enum Stage: Equatable, Sendable
+	{
+		/// まだ何も始まっていない。`<think>` を探す。
+		case beforeThought
+		/// 思考の中。`</think>` だけを探す。
+		case insideThought
+		/// 思考は終わった（または最初から無かった）。**もうタグは探さない。**
+		case afterThought
+	}
+
 	/// まだ確定していない末尾（タグの途中かもしれない部分）。
 	private var pending = ""
+	private var stage = Stage.beforeThought
 	/// いま `<think>` の内側にいるか。
-	public private(set) var isInsideReasoning = false
+	public var isInsideReasoning: Bool { stage == .insideThought }
 
 	/// 本文・思考それぞれについて、空白以外を 1 文字でも出したか。
 	/// 出すまでの空白は捨てる（＝先頭の空行を作らない）。
@@ -91,31 +118,65 @@ public struct ReasoningSplitter: Equatable, Sendable
 		pending += text
 		var result = ReasoningText()
 
-		// タグが見つかるかぎり切り出しを繰り返す（1 断片に複数のタグが入って
-		// いることがある — 例えば全文を一度に食わせたとき）。
-		//
-		// **どちらの状態でも両方のタグを探す。** 閉じているときに `</think>` を
-		// 探していないと、思考の外側に来た閉じタグを見つけられず、タグがそのまま
-		// 本文に出る（実機で見えた。壊れかけの小さいモデルは `</think>` を 2 回
-		// 出すことがある）。タグは状態を決めるためのもので、**本文にも思考にも
-		// 出さない**。閉じているものをもう一度閉じても、開いているものをもう一度
-		// 開いても、状態が変わらないだけで害はない。
-		while let match = ReasoningSplitter.firstTag(in: pending)
+		// いまの段階が探すタグを決める。1 断片に開きと閉じの両方が入っている
+		// ことがある（全文を一度に食わせたとき）ので繰り返す。
+		scan: while true
 		{
-			emit(String(pending[pending.startIndex ..< match.range.lowerBound]), into: &result)
-			pending = String(pending[match.range.upperBound...])
-			isInsideReasoning = match.opens
+			switch stage
+			{
+				case .beforeThought:
+					guard let range = pending.range(of: ReasoningSplitter.openTag)
+					else
+					{
+						break scan
+					}
+					// タグの前に本文があるなら、思考の始まりではない
+					// （空白は本文と数えない — `\n<think>` は普通に来る）。
+					if pending[..<range.lowerBound].contains(where: { !$0.isWhitespace })
+					{
+						stage = .afterThought
+						continue scan
+					}
+					emit(String(pending[..<range.lowerBound]), into: &result)
+					pending = String(pending[range.upperBound...])
+					stage = .insideThought
+				case .insideThought:
+					guard let range = pending.range(of: ReasoningSplitter.closeTag)
+					else
+					{
+						break scan
+					}
+					emit(String(pending[..<range.lowerBound]), into: &result)
+					pending = String(pending[range.upperBound...])
+					stage = .afterThought
+				case .afterThought:
+					// もう探すものが無い。残りは全部そのまま本文へ。
+					break scan
+			}
 		}
 
-		// タグが無いぶんは出してよいが、**末尾がタグの途中かもしれない**。
-		// その可能性がある長さだけ保留に残す。両方のタグについて見る —
-		// `</th` は `<think>` の接頭辞ではないので、閉じタグを見ないと
-		// 割れて届いた閉じタグを取りこぼす。
-		let held = max(
-			ReasoningSplitter.partialTagLength(atEndOf: pending, of: ReasoningSplitter.openTag),
-			ReasoningSplitter.partialTagLength(atEndOf: pending, of: ReasoningSplitter.closeTag))
+		// タグが無いぶんは出してよいが、**末尾がタグの途中かもしれない**
+		// （`<th` + `ink>` と割れて届く）。その可能性がある長さだけ保留に残す。
+		// 探しているタグについてだけ見ればよい。
+		let held: Int
+		switch stage
+		{
+			case .beforeThought:
+				held = ReasoningSplitter.partialTagLength(
+					atEndOf: pending, of: ReasoningSplitter.openTag)
+			case .insideThought:
+				held = ReasoningSplitter.partialTagLength(
+					atEndOf: pending, of: ReasoningSplitter.closeTag)
+			case .afterThought:
+				held = 0
+		}
 		let settled = String(pending.dropLast(held))
 		pending = String(pending.suffix(held))
+		// 本文が始まったら、以降のタグは文字列と断定する（上の Stage を参照）。
+		if stage == .beforeThought, settled.contains(where: { !$0.isWhitespace })
+		{
+			stage = .afterThought
+		}
 		emit(settled, into: &result)
 		return result
 	}
@@ -211,24 +272,6 @@ public struct ReasoningSplitter: Equatable, Sendable
 		result.answer += tail.answer
 		result.reasoning += tail.reasoning
 		return result
-	}
-
-	/// 先に現れるほうのタグ。`opens` は「見つかったのが開きタグか」。
-	static func firstTag(in text: String) -> (range: Range<String.Index>, opens: Bool)?
-	{
-		let open = text.range(of: ReasoningSplitter.openTag)
-		let close = text.range(of: ReasoningSplitter.closeTag)
-		switch (open, close)
-		{
-			case (nil, nil):
-				return nil
-			case (let open?, nil):
-				return (open, true)
-			case (nil, let close?):
-				return (close, false)
-			case (let open?, let close?):
-				return open.lowerBound < close.lowerBound ? (open, true) : (close, false)
-		}
 	}
 
 	/// 文字列の末尾が `tag` の途中（＝真の接頭辞）になっている長さ。無ければ 0。
