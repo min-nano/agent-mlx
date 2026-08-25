@@ -93,28 +93,27 @@ public struct ReasoningSplitter: Equatable, Sendable
 
 		// タグが見つかるかぎり切り出しを繰り返す（1 断片に複数のタグが入って
 		// いることがある — 例えば全文を一度に食わせたとき）。
-		while true
+		//
+		// **どちらの状態でも両方のタグを探す。** 閉じているときに `</think>` を
+		// 探していないと、思考の外側に来た閉じタグを見つけられず、タグがそのまま
+		// 本文に出る（実機で見えた。壊れかけの小さいモデルは `</think>` を 2 回
+		// 出すことがある）。タグは状態を決めるためのもので、**本文にも思考にも
+		// 出さない**。閉じているものをもう一度閉じても、開いているものをもう一度
+		// 開いても、状態が変わらないだけで害はない。
+		while let match = ReasoningSplitter.firstTag(in: pending)
 		{
-			let tag = isInsideReasoning
-				? ReasoningSplitter.closeTag
-				: ReasoningSplitter.openTag
-			guard let range = pending.range(of: tag)
-			else
-			{
-				break
-			}
-			let head = String(pending[pending.startIndex ..< range.lowerBound])
-			emit(head, into: &result)
-			pending = String(pending[range.upperBound...])
-			isInsideReasoning.toggle()
+			emit(String(pending[pending.startIndex ..< match.range.lowerBound]), into: &result)
+			pending = String(pending[match.range.upperBound...])
+			isInsideReasoning = match.opens
 		}
 
 		// タグが無いぶんは出してよいが、**末尾がタグの途中かもしれない**。
-		// その可能性がある長さだけ保留に残す。
-		let tag = isInsideReasoning
-			? ReasoningSplitter.closeTag
-			: ReasoningSplitter.openTag
-		let held = ReasoningSplitter.partialTagLength(atEndOf: pending, of: tag)
+		// その可能性がある長さだけ保留に残す。両方のタグについて見る —
+		// `</th` は `<think>` の接頭辞ではないので、閉じタグを見ないと
+		// 割れて届いた閉じタグを取りこぼす。
+		let held = max(
+			ReasoningSplitter.partialTagLength(atEndOf: pending, of: ReasoningSplitter.openTag),
+			ReasoningSplitter.partialTagLength(atEndOf: pending, of: ReasoningSplitter.closeTag))
 		let settled = String(pending.dropLast(held))
 		pending = String(pending.suffix(held))
 		emit(settled, into: &result)
@@ -212,6 +211,24 @@ public struct ReasoningSplitter: Equatable, Sendable
 		result.answer += tail.answer
 		result.reasoning += tail.reasoning
 		return result
+	}
+
+	/// 先に現れるほうのタグ。`opens` は「見つかったのが開きタグか」。
+	static func firstTag(in text: String) -> (range: Range<String.Index>, opens: Bool)?
+	{
+		let open = text.range(of: ReasoningSplitter.openTag)
+		let close = text.range(of: ReasoningSplitter.closeTag)
+		switch (open, close)
+		{
+			case (nil, nil):
+				return nil
+			case (let open?, nil):
+				return (open, true)
+			case (nil, let close?):
+				return (close, false)
+			case (let open?, let close?):
+				return open.lowerBound < close.lowerBound ? (open, true) : (close, false)
+		}
 	}
 
 	/// 文字列の末尾が `tag` の途中（＝真の接頭辞）になっている長さ。無ければ 0。

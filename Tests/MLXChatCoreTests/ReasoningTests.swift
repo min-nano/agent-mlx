@@ -76,6 +76,10 @@ final class ReasoningTests: XCTestCase
 			"\n\n  前後に空白  \n\n",
 			"前 <think>中</think> 後",
 			"   ",
+			// 壊れた並び（閉じタグが 2 回・開きタグが 2 回）も一致すること。
+			"<think>考える</think>答え。\n</think>\n続き",
+			"<think>考え<think>まだ考え</think>答え",
+			"</think>いきなり閉じる",
 		]
 		for sample in samples
 		{
@@ -101,6 +105,41 @@ final class ReasoningTests: XCTestCase
 		XCTAssertEqual(splitter.flush(), ReasoningText(answer: "<thi"))
 		// flush 後は空になる。
 		XCTAssertEqual(splitter.flush(), ReasoningText())
+	}
+
+	// -----------------------------------------------------------------
+	// 壊れたタグの並び
+	// -----------------------------------------------------------------
+
+	/// 小さいモデルが壊れると `</think>` を 2 回出すことがある。閉じているのに
+	/// もう一度閉じられた形で、片方のタグしか探していないと**タグがそのまま
+	/// 本文に出る**（実機で見えた）。タグは本文にも思考にも出さない。
+	func testStrayCloseTagIsNotShown()
+	{
+		let result = ReasoningSplitter.split("<think>考える</think>答え。\n</think>\n続き")
+		XCTAssertEqual(result.reasoning, "考える")
+		XCTAssertEqual(result.answer, "答え。\n\n続き")
+		XCTAssertFalse(result.answer.contains("think"), result.answer)
+	}
+
+	/// 思考の外側で閉じタグが割れて届いても取りこぼさない。
+	/// （`</th` は `<think>` の接頭辞ではないので、開きタグだけを見ていると漏れる）
+	func testSplitCloseTagOutsideReasoningIsStillATag()
+	{
+		var splitter = ReasoningSplitter()
+		XCTAssertEqual(
+			splitter.consume("<think>思考</think>答え</th"),
+			ReasoningText(answer: "答え", reasoning: "思考"))
+		XCTAssertEqual(splitter.consume("ink>続き"), ReasoningText(answer: "続き"))
+		XCTAssertEqual(splitter.flush(), ReasoningText())
+	}
+
+	/// 開いているのにもう一度開かれた場合も、状態が変わらないだけ。
+	func testStrayOpenTagIsNotShown()
+	{
+		let result = ReasoningSplitter.split("<think>考え<think>まだ考え</think>答え")
+		XCTAssertEqual(result.reasoning, "考えまだ考え")
+		XCTAssertEqual(result.answer, "答え")
 	}
 
 	// -----------------------------------------------------------------
