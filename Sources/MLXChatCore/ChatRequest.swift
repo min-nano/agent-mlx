@@ -63,6 +63,18 @@ public struct ChatRequest: Equatable, Sendable
 			outputFile: nil)
 	}
 
+	/// モデルへ実際に渡す履歴。
+	///
+	/// `history` をそのまま使わないのは、チャットテンプレートが「user と
+	/// assistant が交互」を要求することがあるため（詳しくは
+	/// ``Conversation/alternatingHistory(_:)``）。ここを通しておけば、入口が
+	/// GUI でも CLI でも URL スキームでも、ライブラリから直接組み立てた
+	/// 場合でも同じ規則で守られる。**エンジンはこちらを使うこと。**
+	public var promptHistory: [ChatMessage]
+	{
+		Conversation.alternatingHistory(history)
+	}
+
 	/// 実行前に分かる誤りを検出する。
 	///
 	/// モデル id を一覧に限っているのは ModelCatalog のコメントにある理由による

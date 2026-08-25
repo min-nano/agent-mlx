@@ -107,11 +107,7 @@ public struct Conversation: Identifiable, Codable, Equatable, Sendable
 		var history: [ChatMessage] = []
 		if maxMessages > 0
 		{
-			history = Array(messages.suffix(maxMessages))
-			if let first = history.first, first.role == .assistant
-			{
-				history.removeFirst()
-			}
+			history = Conversation.alternatingHistory(Array(messages.suffix(maxMessages)))
 		}
 		let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmedSystem.isEmpty
@@ -120,6 +116,86 @@ public struct Conversation: Identifiable, Codable, Equatable, Sendable
 			return history
 		}
 		return [ChatMessage(role: .system, text: trimmedSystem)] + history
+	}
+
+	/// 履歴を「user と assistant が交互・user で始まり assistant で終わる」形に整える。
+	///
+	/// なぜ要るか: チャットテンプレートには**役割が交互であることを要求する**もの
+	/// がある（Gemma 3 は崩れていると `Conversation roles must alternate
+	/// user/assistant/user/assistant/...` を投げて生成そのものが失敗する）。
+	/// 会話は簡単に崩れる — 生成が失敗すると答えの無い user 発言が残り、次に
+	/// 送ると user が 2 つ続く。実機で踏んだのはこの形でした。
+	///
+	/// 整え方は 4 つ。
+	///
+	/// 1. **中身の無い発言を捨てる。** 停止・失敗の残骸（本文が空の assistant）は
+	///    モデルに何も教えないうえ、テンプレートによっては壊れる。
+	/// 2. **同じ役割が続いたら最後の 1 つだけ残す。** 答えの無いまま繰り返された
+	///    問いのうち、意味があるのは最後のものだけ。
+	/// 3. **assistant で始まらない。** 途中から切り出したときに起きる。
+	/// 4. **user で終わらない。** 履歴の後ろには必ず今回の prompt（user）が続くので、
+	///    user で終わっているとそこで 2 つ続いてしまう。落とすのは「答えを
+	///    もらえなかった問い」で、たいていは今まさに送り直そうとしているもの。
+	///
+	/// system 発言はここでは扱わない（``promptMessages`` が先頭に置く）。
+	public static func alternatingHistory(_ messages: [ChatMessage]) -> [ChatMessage]
+	{
+		var result: [ChatMessage] = []
+		for message in messages
+		{
+			guard message.role != .system,
+				!message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			else
+			{
+				continue
+			}
+			if result.last?.role == message.role
+			{
+				// 同じ役割が続いた。新しいほうで置き換える。
+				result.removeLast()
+			}
+			result.append(message)
+		}
+		if result.first?.role == .assistant
+		{
+			result.removeFirst()
+		}
+		if result.last?.role == .user
+		{
+			result.removeLast()
+		}
+		return result
+	}
+
+	/// 失敗した 1 往復を取り除き、送れなかった問いの本文を返す。
+	///
+	/// 生成が 1 文字も出せずに終わると、答えの無い user 発言が残る。そのままだと
+	/// (1) 送り直したときに画面へ同じ問いが 2 つ並び、(2) user が 2 つ続くので
+	/// チャットテンプレートが壊れる（``alternatingHistory(_:)``）。(2) は履歴を
+	/// 整えることで防いでいるが、(1) は残骸を消さないと直らない。
+	///
+	/// 思考（`reasoning`）だけでも出ていれば**残す** — 利用者に見せる価値がある
+	/// し、上限に達して答えが出なかったことの証拠でもある。
+	///
+	/// - Returns: 取り除いた問いの本文（入力欄へ戻すため）。何も取り除かなかった
+	///   ときは nil。
+	public mutating func removeFailedExchange(answerID: UUID) -> String?
+	{
+		guard let index = messages.firstIndex(where: { $0.id == answerID }),
+			messages[index].role == .assistant,
+			messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+			!messages[index].hasReasoning
+		else
+		{
+			return nil
+		}
+		messages.remove(at: index)
+		guard index > 0, messages[index - 1].role == .user
+		else
+		{
+			return nil
+		}
+		return messages.remove(at: index - 1).text
 	}
 
 	/// 発言を足して updatedAt を進める。呼び出し側が更新日時を書き忘れると

@@ -167,7 +167,9 @@ actor MLXChatEngine
 		let session = ChatSession(
 			model,
 			instructions: request.systemPrompt.isEmpty ? nil : request.systemPrompt,
-			history: request.history.map(MLXChatEngine.message(from:)),
+			// history ではなく promptHistory。チャットテンプレートの前提
+			// （user/assistant が交互）に合わせる判断は Core が持っている。
+			history: request.promptHistory.map(MLXChatEngine.message(from:)),
 			generateParameters: MLXChatEngine.parameters(from: request.parameters))
 
 		onEvent(.phase(.prefill))

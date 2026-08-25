@@ -93,6 +93,12 @@ docs/design.md              ← 設計の「なぜ」。人間と Claude 以外�
   `channel=` / `branch=` / `commit=` / `built=` 行、タグ `stable` / `dev-<slug>`）は
   `UpdateFeed` と `build.yml` の**対**で定義されている。片方を変えるときは必ず
   両方＋テストを更新する。
+- **モデルへ渡す履歴は必ず `ChatRequest.promptHistory` を使う**（生の `history`
+  ではなく）。チャットテンプレートには**役割が交互であることを要求する**ものが
+  あり（Gemma 3 は崩れていると `Conversation roles must alternate …` を投げて
+  生成ごと失敗する。実機で踏んだ）、会話は生成の失敗で簡単に崩れる。整える
+  規則は `Conversation.alternatingHistory` に 1 つだけ置く — 入口ごとに
+  「空の発言を除く」「user が続いたら…」を書かないこと。
 - **エンジンはプロセスに 1 つ（`MLXChatEngine.shared`）**。チャット画面とベンチ
   マーク画面が別々に持つと同じ重みを二重に読み込む（数 GB × 2）。節約ではなく必須。
 - **文字入力のある画面には、キーボードを畳む手段を必ず用意する。** iOS は

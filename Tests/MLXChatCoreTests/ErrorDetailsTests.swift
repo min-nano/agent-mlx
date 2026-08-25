@@ -86,6 +86,21 @@ final class ErrorDetailsTests: XCTestCase
 		XCTAssertFalse(cancelled.contains("詳細"), cancelled)
 	}
 
+	/// 実機で出た文言そのもの。Gemma 3 は交互でない会話を拒む。
+	func testClassifiesChatTemplateRejection()
+	{
+		let raw = "TemplateException(message: Optional(\"Conversation roles must "
+			+ "alternate user/assistant/user/assistant/...\"))"
+		XCTAssertEqual(ErrorDetails.classify(raw), .chatTemplate)
+		XCTAssertEqual(
+			ErrorDetails.classify("Jinja error: System role not supported"), .chatTemplate)
+
+		// 対処が読める文言になっていること（原文も残る）。
+		let message = ErrorDetails.message(rawDescription: raw)
+		XCTAssertTrue(message.contains("新しい会話"), message)
+		XCTAssertTrue(message.contains("詳細"), message)
+	}
+
 	func testMessageFromError()
 	{
 		let message = ErrorDetails.message(

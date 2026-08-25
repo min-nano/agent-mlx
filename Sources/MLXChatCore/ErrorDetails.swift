@@ -27,6 +27,8 @@ public enum ErrorDetails
 		case diskFull
 		/// MLXLLM が対応していないモデル形式。
 		case unsupportedModel
+		/// チャットテンプレートが会話を受け付けなかった。
+		case chatTemplate
 		/// 利用者が停止した。
 		case cancelled
 		/// 上記のいずれでもない。
@@ -47,6 +49,13 @@ public enum ErrorDetails
 		if text.contains("cancel")
 		{
 			return .cancelled
+		}
+		// テンプレートの拒否はメモリ判定より先に見る。文言に "model" を含む
+		// ことがあり、後ろに置くと unsupportedModel に吸われる。
+		if text.contains("templateexception") || text.contains("roles must alternate")
+			|| text.contains("role not supported") || text.contains("jinja")
+		{
+			return .chatTemplate
 		}
 		if text.contains("out of memory") || text.contains("insufficient memory")
 			|| text.contains("memory limit") || text.contains("failed to allocate")
@@ -95,6 +104,17 @@ public enum ErrorDetails
 					+ "使っていないモデルを削除してください。"
 			case .unsupportedModel:
 				return "このモデル形式には対応していません。一覧（`models`）にあるモデルを選んでください。"
+			case .chatTemplate:
+				var text = ""
+				if let modelName
+				{
+					text += "\(modelName) の"
+				}
+				return text
+					+ "チャット書式に、渡した会話が合いませんでした。"
+					+ "モデルによっては「発言が user と assistant で交互に並んでいること」や"
+					+ "「system 指示を使わないこと」を要求します。"
+					+ "「新しい会話」を作り直すか、設定の「システム指示」を空にしてみてください。"
 			case .cancelled:
 				return "生成を停止しました。"
 			case .unknown:

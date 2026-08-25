@@ -227,9 +227,16 @@ final class ChatViewModel: ObservableObject
 			case .failed(let message):
 				append(splitter.flush(), to: answerID)
 				errorMessage = message
-				// 中身の無い応答が会話に残ると、次の生成でモデルへ空の
-				// assistant 発言を渡すことになる。失敗したときは取り除く。
-				conversation.messages.removeAll { $0.id == answerID && $0.text.isEmpty }
+				// 中身の無い応答と、答えをもらえなかった問いを取り除く。残すと
+				// 送り直したときに同じ問いが画面に 2 つ並ぶ（実機で踏んだ）。
+				// 判断は Core の removeFailedExchange が持つ。
+				let canRestore = input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				if let unsent = conversation.removeFailedExchange(answerID: answerID),
+					canRestore
+				{
+					// 送れなかった文面は入力欄へ戻す（打ち直させない）。
+					input = unsent
+				}
 				phase = nil
 		}
 	}
