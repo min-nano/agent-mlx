@@ -1,0 +1,28 @@
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode プロジェクトは project.yml から生成する（scripts/generate-xcodeproj.sh）。
+# .pbxproj は差分が読めず競合も解決できないので、リポジトリには入れない。
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+.derived/
+.spm/
+
+# 手元だけの設定（Team ID・転送先デバイスなど。scripts/run-ios.sh が読む）
+.mlxchat-local.env
+
+# パッケージング・CI の成果物
+dist/
+dist-app/
+debug-out/
+
+# Python（scripts/make-app-icon.py）
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

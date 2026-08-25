@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  MLXChat（macOS 版）の Info.plist。
+  ビルドスタンプ（GitCommit / GitBranch / BuildChannel / BuiltAt）は
+  scripts/stamp-app.sh が PlistBuddy で書き込み、自動アップデート
+  （MLXChatUpdater）がリリースと突き合わせる鍵になる。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>ja</string>
+	<key>CFBundleDisplayName</key>
+	<string>MLX Chat</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string></string>
+	<!-- 外部アプリ連携 API: mlxchat://chat?prompt=... （APICommand と対） -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.minnano.mlxchat.url</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mlxchat</string>
+			</array>
+		</dict>
+	</array>
+	<!-- ビルドスタンプ（scripts/stamp-app.sh が上書きする） -->
+	<key>GitCommit</key>
+	<string>unknown</string>
+	<key>GitBranch</key>
+	<string>unknown</string>
+	<key>BuildChannel</key>
+	<string>unknown</string>
+	<key>BuiltAt</key>
+	<string>unknown</string>
+</dict>
+</plist>

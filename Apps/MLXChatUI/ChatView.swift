@@ -1,0 +1,254 @@
+//
+//  ChatView.swift
+//
+//  チャット画面。iOS と macOS で同じものを使う（差が出るのは入れ物側 —
+//  iOS は TabView、macOS は NavigationSplitView。RootView を参照）。
+//
+
+import SwiftUI
+
+struct ChatView: View
+{
+	@EnvironmentObject private var model: ChatViewModel
+	@FocusState private var inputFocused: Bool
+
+	var body: some View
+	{
+		VStack(spacing: 0)
+		{
+			transcript
+			Divider()
+			status
+			composer
+		}
+		.navigationTitle(model.conversation.derivedTitle)
+		.toolbar
+		{
+			ToolbarItem
+			{
+				// 書き出しは Core（Transcript）が組み立てる。実測値つきの
+				// Markdown なので、答えと「そのときの速度」を一緒に人へ渡せる。
+				ShareLink(item: Transcript.markdown(model.conversation))
+				{
+					Label("書き出す", systemImage: "square.and.arrow.up")
+				}
+				.disabled(model.conversation.messages.isEmpty)
+			}
+			ToolbarItem
+			{
+				Button
+				{
+					model.newConversation()
+				} label: {
+					Label("新しい会話", systemImage: "square.and.pencil")
+				}
+				.disabled(model.isGenerating)
+			}
+		}
+		.alert(
+			"エラー",
+			isPresented: Binding(
+				get: { model.errorMessage != nil },
+				set: { if !$0 { model.errorMessage = nil } }))
+		{
+			Button("OK", role: .cancel) { model.errorMessage = nil }
+		} message: {
+			Text(model.errorMessage ?? "")
+		}
+	}
+
+	// -----------------------------------------------------------------
+
+	private var transcript: some View
+	{
+		ScrollViewReader
+		{ proxy in
+			ScrollView
+			{
+				LazyVStack(alignment: .leading, spacing: 14)
+				{
+					if model.conversation.messages.isEmpty
+					{
+						emptyState
+					}
+					ForEach(model.conversation.messages)
+					{ message in
+						MessageRow(
+							message: message,
+							isStreaming: model.isGenerating
+								&& message.id == model.conversation.messages.last?.id,
+							isReasoningExpanded: reasoningBinding(for: message.id))
+							.id(message.id)
+					}
+					// 末尾の目印。高さゼロで内容の一番下に必ず居るので、
+					// ここへ寄せることは「内容の終わりへ行く」と同じ意味になる。
+					// 発言そのもの（高さが刻々と変わる・LazyVStack だと画面外で
+					// 消える）を目標にすると、寄せた先が内容より下になり得る。
+					Color.clear
+						.frame(height: 1)
+						.id(Self.bottomAnchor)
+				}
+				.padding()
+			}
+			// キーボードを畳む手段はこの 2 つ。**入力欄の外を触ったら閉じる**が
+			// 主で、引き下げはその補助。
+			//
+			// 専用のボタンは置かない。入力欄の並びに置くと入力欄が狭くなり、
+			// キーボード上のツールバーに置くと送信ボタンと重なる（どちらも
+			// 実機で試して駄目だった）。「読むために画面を触ったら引っ込む」の
+			// ほうが、ボタンを探すより自然でもある。
+			.simultaneousGesture(TapGesture().onEnded
+			{
+				// simultaneousGesture なので、スクロールも吹き出しの
+				// 折りたたみ（思考の開閉）も従来どおり効く。
+				#if os(iOS)
+					inputFocused = false
+				#endif
+			})
+			.scrollDismissesKeyboard(.interactively)
+			// 生成中は届いたトークンを追って一番下へ寄せ続ける。長さの合計を
+			// 見ているのは、推論モデルが**思考だけを伸ばしている間**（本文は空の
+			// まま）もスクロールを追従させるため。
+			//
+			// アニメーションを付けないのは、寄せる先が毎トークン動くため —
+			// 動く目標へ 0.15 秒かけて滑らせると、着く前に次の指示が来て
+			// 追いつけなくなる。ここは「常に末尾に居る」ことだけが要る。
+			.onChange(of: streamedLength)
+			{
+				proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+			}
+			// 思考を開閉すると高さが画面数枚ぶん変わる。畳んだ側では内容が
+			// 一気に短くなるので、寄せ直さないとスクロール位置が内容より下に
+			// 取り残されうる。ただし**生成中だけ**にする — 生成していないときに
+			// 寄せると、履歴の上のほうの思考を開いただけで末尾へ飛ばされて
+			// しまい、読んでいる場所を奪うことになる。
+			.onChange(of: model.reasoningDisclosure)
+			{
+				guard model.isGenerating
+				else
+				{
+					return
+				}
+				proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+			}
+			// 発言が増えたとき（送信直後）も末尾へ。
+			.onChange(of: model.conversation.messages.count)
+			{
+				proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+			}
+		}
+	}
+
+	/// 履歴の一番下に置く目印の id。
+	private static let bottomAnchor = "transcript-bottom"
+
+	/// 思考の開閉を ChatViewModel（が持つ Core の ReasoningDisclosure）へ橋渡しする。
+	private func reasoningBinding(for id: UUID) -> Binding<Bool>
+	{
+		Binding(
+			get: { model.reasoningDisclosure.isExpanded(id) },
+			set: { model.reasoningDisclosure.setExpanded($0, for: id) })
+	}
+
+	private var emptyState: some View
+	{
+		VStack(alignment: .leading, spacing: 8)
+		{
+			Text("ローカルで動く LLM です")
+				.font(.headline)
+			Text("最初の送信でモデル（\(currentModelName)）をダウンロードします。"
+				+ "以降はオフラインでも動きます。")
+				.font(.callout)
+				.foregroundStyle(.secondary)
+			if let warning = model.modelWarning
+			{
+				Label(warning, systemImage: "exclamationmark.triangle")
+					.font(.caption)
+					.foregroundStyle(.orange)
+			}
+		}
+		.padding(.vertical, 24)
+	}
+
+	/// 生成中の発言の長さ（思考を含む）。スクロール追従の変化検知に使う。
+	///
+	/// 本文だけを見ると、推論モデルが思考を伸ばしている間（本文は空のまま）に
+	/// 追従が止まってしまう。
+	private var streamedLength: Int
+	{
+		guard let last = model.conversation.messages.last
+		else
+		{
+			return 0
+		}
+		return last.text.count + (last.reasoning?.count ?? 0)
+	}
+
+	private var currentModelName: String
+	{
+		ModelCatalog.model(id: model.conversation.modelID)?.displayName
+			?? model.conversation.modelID
+	}
+
+	// -----------------------------------------------------------------
+
+	@ViewBuilder
+	private var status: some View
+	{
+		if let phase = model.phase
+		{
+			HStack(spacing: 8)
+			{
+				if phase.hasDeterminateProgress
+				{
+					ProgressView(value: model.downloadProgress)
+						.frame(maxWidth: 160)
+				}
+				else
+				{
+					ProgressView()
+						.controlSize(.small)
+				}
+				Text(phase.description)
+					.font(.caption)
+					.foregroundStyle(.secondary)
+				Spacer()
+				Button("停止", role: .destructive) { model.stop() }
+					.buttonStyle(.borderless)
+			}
+			.padding(.horizontal)
+			.padding(.vertical, 6)
+		}
+	}
+
+	private var composer: some View
+	{
+		HStack(alignment: .bottom, spacing: 8)
+		{
+			TextField("メッセージ", text: $model.input, axis: .vertical)
+				.lineLimit(1 ... 6)
+				.textFieldStyle(.roundedBorder)
+				.focused($inputFocused)
+				.onSubmit
+				{
+					model.send()
+					inputFocused = false
+				}
+			Button
+			{
+				model.send()
+				// 送ったあとは答えを読みたいので、キーボードは引っ込める。
+				// iOS では畳まないと下タブが隠れたままになる。
+				inputFocused = false
+			} label: {
+				Label("送信", systemImage: "arrow.up.circle.fill")
+					.labelStyle(.iconOnly)
+					.font(.title2)
+			}
+			.buttonStyle(.borderless)
+			.disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				|| model.isGenerating)
+		}
+		.padding()
+	}
+}

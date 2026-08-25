@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  MLXChat（iOS 版）の Info.plist。
+  ビルドスタンプ（GitCommit / GitBranch / BuildChannel / BuiltAt）は
+  scripts/stamp-app.sh が PlistBuddy で書き込む。iOS 版は自分自身を差し替え
+  られないので更新はしないが、「いま入っているのがどのビルドか」を画面で
+  確かめられるようにスタンプは持つ。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>ja</string>
+	<key>CFBundleDisplayName</key>
+	<string>MLX Chat</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- UILaunchScreen が無いと iOS は互換モードで letterbox 表示にする。
+	     SwiftUI の App ライフサイクルでも空の辞書だけは必要。 -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- 外部アプリ連携 API: mlxchat://chat?prompt=... （APICommand と対） -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.minnano.mlxchat.url</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mlxchat</string>
+			</array>
+		</dict>
+	</array>
+	<!-- ビルドスタンプ（scripts/stamp-app.sh が上書きする） -->
+	<key>GitCommit</key>
+	<string>unknown</string>
+	<key>GitBranch</key>
+	<string>unknown</string>
+	<key>BuildChannel</key>
+	<string>unknown</string>
+	<key>BuiltAt</key>
+	<string>unknown</string>
+</dict>
+</plist>
